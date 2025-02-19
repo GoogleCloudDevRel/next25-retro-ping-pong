@@ -4,3 +4,6 @@ Program](https://bughunters.google.com/open-source-security).
 
 This project is intended for demonstration purposes only. It is not
 intended for use in a production environment.
+
+You can review [Google Cloud terms of service
+here](https://console.cloud.google.com/tos?id=cloud).
