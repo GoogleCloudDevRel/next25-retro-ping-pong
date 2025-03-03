@@ -1,5 +1,9 @@
+import base64
+import os
 import pygame
 from config import Color, Screen, Game
+
+IMAGE_DIR = "images"
 
 
 def draw_splash_screen(canvas):
@@ -18,6 +22,7 @@ def draw_splash_screen(canvas):
 
     canvas.blit(title_surface, title_rect)
     canvas.blit(instruction_surface, instruction_rect)
+    clear_image_dir()
 
 
 def draw_game_pane(canvas, game_manager):
@@ -112,3 +117,21 @@ def draw_pause_screen(canvas, game_manager):
     instruction_surface = instruction_font.render("Press ENTER to continue", True, Color.WHITE)
     instruction_rect = instruction_surface.get_rect(center=instruction_pos)
     canvas.blit(instruction_surface, instruction_rect)
+
+
+def clear_image_dir():
+    if not os.path.exists(IMAGE_DIR):
+        os.makedirs(IMAGE_DIR)
+    for file in os.listdir(IMAGE_DIR):
+        os.remove(os.path.join(IMAGE_DIR, file))
+
+
+def make_screenshot(canvas, frame_count):
+    filename = os.path.join(IMAGE_DIR, f"frame_{frame_count:04d}.png")
+    pygame.image.save(canvas, filename)
+    with open(filename, "rb") as image_file:
+        image_bytes = image_file.read()
+    return {
+        "mime_type": "image/png",
+        "data": base64.b64encode(image_bytes).decode("utf-8")
+    }

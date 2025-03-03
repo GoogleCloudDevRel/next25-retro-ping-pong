@@ -14,6 +14,7 @@ class GameManager:
         self.right_score = 0
         self.last_scorer = 0
         self.state = State.SPLASH
+        self.frame = 0
 
     def init_game(self):
         """Initializes game state variables and game objects."""
