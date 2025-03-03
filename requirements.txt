@@ -1,3 +1,4 @@
 pygame
 python-dotenv
 google-genai
+pyaudio
