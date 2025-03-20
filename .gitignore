@@ -176,3 +176,5 @@ cython_debug/
 /images
 /videos
 /backup
+
+.DS_Store

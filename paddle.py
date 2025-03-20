@@ -1,25 +1,28 @@
 import pygame
-from config import Color, Screen
+from config import Screen
 
 
 class Paddle:
-    def __init__(
-        self, x=0, y=0, width=8, height=80,
-        color=Color.GREEN, speed=15
-    ):
+    def __init__(self, x=0, y=0, speed=20):
         self.x = x
         self.y = y
-        self.width = width
-        self.height = height
-        self.half_width = width // 2
-        self.half_height = height // 2
-        self.color = color
         self.speed = speed
         self.y_vel = 0
+
+        self.images = []
+        for i in range(4):
+            image_path = f"./assets/paddle/paddle_{i}.png"
+            image = pygame.image.load(image_path)
+            self.images.append(image)
+        self.index = 0
+        self.image = self.images[self.index]
+        self.rect = pygame.Rect(0, 0, 10, 100)  # The actual paddle size
+        self.rect.center = (self.x, self.y)
 
     def init_location(self, x, y):
         self.x = x
         self.y = y
+        self.rect.center = (int(self.x), int(self.y))
 
     def move_up(self):
         self.y_vel = -self.speed
@@ -31,8 +34,8 @@ class Paddle:
         self.y_vel = 0
 
     def update_position(self):
-        top_border = Screen.GAME_PANE_START_Y + self.half_height
-        bottom_border = Screen.GAME_PANE_START_Y + Screen.GAME_PANE_HEIGHT - self.half_height
+        top_border = self.rect.height // 2
+        bottom_border = Screen.GAME_PANE_HEIGHT - self.rect.height // 2
         paddle_next_pos = self.y + self.y_vel
 
         if top_border < paddle_next_pos < bottom_border:
@@ -41,24 +44,16 @@ class Paddle:
             self.y = top_border
         elif paddle_next_pos >= bottom_border:
             self.y = bottom_border
+        self.rect.centery = int(self.y)
 
     def draw(self, canvas):
-        pygame.draw.polygon(
-            canvas,
-            self.color,
-            [
-                [self.x - self.half_width, self.y - self.half_height],
-                [self.x - self.half_width, self.y + self.half_height],
-                [self.x + self.half_width, self.y + self.half_height],
-                [self.x + self.half_width, self.y - self.half_height],
-            ],
-            0
-        )
+        blit_pos = (self.rect.centerx - self.image.get_width() // 2,
+                    self.rect.centery - self.image.get_height() // 2)
+        canvas.blit(self.image, blit_pos)
 
     def get_rect(self):
-        return pygame.Rect(
-            self.x - self.half_width,
-            self.y - self.half_height,
-            self.width,
-            self.height
-        )
+        return self.rect
+
+    def next_image(self):
+        self.index = (self.index + 1) % len(self.images)
+        self.image = self.images[self.index]

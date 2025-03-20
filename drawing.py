@@ -1,137 +1,137 @@
-import base64
-import os
+import cv2
 import pygame
 from config import Color, Screen, Game
 
-IMAGE_DIR = "images"
+
+class Assets:
+    def __init__(self):
+        self.COLORS = ["blue", "green", "red", "yellow"]
+        self.splash_video = cv2.VideoCapture("assets/splash.mp4")
+        self.center_line = pygame.image.load("assets/background/center_line.png")
+
+        self.background = pygame.image.load("./assets/background/background.png")
+        self.bottom_pane = pygame.image.load("./assets/background/bottom_pane.png")
+        self.bottom_border = pygame.image.load("assets/background/bottom_border.png")
+        self.text_scan = pygame.image.load("assets/text_headers/scan_for_full_game_summary.png")
+        self.text_press = pygame.image.load("assets/text_headers/press_button_to_skip.png")
+        self.scanline = pygame.image.load("assets/background/scanline.png")
+
+        self.goal = []
+        self.winner1 = []
+        self.winner2 = []
+
+        def append_sequence(arr, path):
+            for i in range(4):
+                image_path = f"{path}{i}.png"
+                image = pygame.image.load(image_path)
+                arr.append(image)
+        append_sequence(self.goal, "./assets/sequences/goal/")
+        append_sequence(self.winner1, "./assets/sequences/win/p1w_")
+        append_sequence(self.winner2, "./assets/sequences/win/p2w_")
+
+        self.goal_backgrounds = {}
+        for color in self.COLORS:
+            self.goal_backgrounds[color] = pygame.image.load(f"./assets/background/{color}.png")
+            self.goal_backgrounds[color+"_rev"] = pygame.image.load(f"./assets/background/{color}_rev.png")
+
+        self.optimize_assets()
+
+    def optimize_assets(self):
+        self.center_line = pygame.transform.scale(self.center_line, (50, Screen.GAME_PANE_HEIGHT * 1.2))
+        border_w, border_h = self.bottom_border.get_size()
+        new_border_h = int(border_h * (Screen.WIDTH / border_w))
+        self.bottom_border = pygame.transform.scale(self.bottom_border, (Screen.WIDTH, new_border_h))
 
 
-def draw_splash_screen(canvas):
-    """Draws the splash screen."""
-    canvas.fill(Color.BLACK)
-
-    title_pos = (Screen.WIDTH // 2, Screen.HEIGHT // 3)
-    title_font = pygame.font.SysFont(Game.FONT, 50)
-    title_surface = title_font.render(Game.TITLE, False, Color.WHITE)
-    title_rect = title_surface.get_rect(center=title_pos)
-
-    instruction_pos = (Screen.WIDTH // 2, Screen.HEIGHT // 2)
-    instruction_font = pygame.font.SysFont(Game.FONT, 30)
-    instruction_surface = instruction_font.render("Press any key to start", False, Color.WHITE)
-    instruction_rect = instruction_surface.get_rect(center=instruction_pos)
-
-    canvas.blit(title_surface, title_rect)
-    canvas.blit(instruction_surface, instruction_rect)
-    clear_image_dir()
-
-
-def draw_game_pane(canvas, game_manager):
+def draw_game_pane(canvas, game_manager, assets):
     """Draws the game pane, paddles, ball, and center elements."""
-    pane_rect = (0, Screen.GAME_PANE_START_Y, Screen.WIDTH, Screen.GAME_PANE_HEIGHT)
-    pygame.draw.rect(canvas, Color.WHITE, pane_rect, 1)
-    center_x = Screen.WIDTH // 2
-    pane_top = Screen.GAME_PANE_START_Y
-    pane_bottom = Screen.GAME_PANE_START_Y + Screen.GAME_PANE_HEIGHT
-    pygame.draw.line(
-        canvas,
-        Color.WHITE,
-        [center_x, pane_top],
-        [center_x, pane_bottom],
-        width=1
+    center_line_image = assets.center_line
+    center_line_rect = center_line_image.get_rect(
+        center=(Screen.WIDTH // 2, Screen.GAME_PANE_HEIGHT // 2)
     )
-    pygame.draw.circle(
-        canvas,
-        Color.WHITE,
-        [Screen.WIDTH // 2, Screen.GAME_PANE_START_Y + Screen.GAME_PANE_HEIGHT // 2],
-        radius=70,
-        width=1
-    )
+    canvas.blit(center_line_image, center_line_rect)
+
     game_manager.paddle1.draw(canvas)
     game_manager.paddle2.draw(canvas)
     game_manager.ball.draw(canvas)
 
 
-def draw_score_pane(canvas, game_manager):
+def draw_score_pane(canvas, game_manager, assets):
     """Draws the score pane with player names and scores."""
-    pygame.draw.rect(canvas, Color.BLACK, (0, 0, Screen.WIDTH, Screen.SCORE_PANE_HEIGHT))
-    font = pygame.font.SysFont(Game.FONT, 30)
-    score_label = f"{game_manager.left_score} : {game_manager.right_score}"
-    p1_text = font.render("Player 1", 1, Color.WHITE)
-    p2_text = font.render("Player 2", 1, Color.WHITE)
-    score_text = font.render(score_label, 1, Color.WHITE)
-    canvas.blit(p1_text, p1_text.get_rect(center=(Screen.WIDTH // 4, 50)))
-    canvas.blit(p2_text, p2_text.get_rect(center=(Screen.WIDTH - (Screen.WIDTH // 4), 50)))
-    canvas.blit(score_text, ((Screen.WIDTH // 2) - 30, 30))
+    score_pane_bg = assets.bottom_pane
+    pane_h = score_pane_bg.get_height()
+    score_pane_bg_rect = score_pane_bg.get_rect(topleft=(0, Screen.HEIGHT - pane_h))
+    canvas.blit(score_pane_bg, score_pane_bg_rect)
+
+    bottom_border = assets.bottom_border
+    bottom_border_rect = bottom_border.get_rect(topleft=(0, Screen.HEIGHT - pane_h))
+    canvas.blit(bottom_border, bottom_border_rect)
+
+    font = Game.FONT
+
+    left_score_str = str(game_manager.left_score)
+    right_score_str = str(game_manager.right_score)
+    p1_index = game_manager.get_paddle_color_index(1)
+    p2_index = game_manager.get_paddle_color_index(2)
+
+    left_score_surface = font.render(left_score_str, True, Color.arr[p1_index])
+    right_score_surface = font.render(right_score_str, True, Color.arr[p2_index])
+
+    score_pane_y = score_pane_bg_rect.top
+    left_score_rect = left_score_surface.get_rect(center=(
+        Screen.WIDTH // 5, Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
+    ))
+    right_score_rect = right_score_surface.get_rect(center=(
+        Screen.WIDTH - (Screen.WIDTH // 5), Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
+    ))
+
+    canvas.blit(left_score_surface, left_score_rect)
+    canvas.blit(right_score_surface, right_score_rect)
 
 
-def draw_log_pane(canvas):
-    """Draws the log pane (currently empty placeholder)."""
-    pane_rect = (0, Screen.LOG_PANE_START_Y, Screen.WIDTH, Screen.LOG_PANE_HEIGHT)
-    text_center_pos = (Screen.WIDTH // 2, Screen.LOG_PANE_START_Y + Screen.LOG_PANE_HEIGHT // 2)
-    font = pygame.font.SysFont(Game.FONT, 10)
-    pygame.draw.rect(canvas, Color.BLACK, pane_rect)
-    log_label = font.render("Log Pane (Empty)", 1, Color.WHITE)
-    log_rect = log_label.get_rect(center=text_center_pos)
-    canvas.blit(log_label, log_rect)
+def draw_game_screen(canvas, game_manager, assets):
+    draw_game_pane(canvas, game_manager, assets)
+    draw_score_pane(canvas, game_manager, assets)
+    game_manager.update_paddles()
+    game_manager.update_ball()
 
 
-def draw_result_screen(canvas, left_score, right_score):
+def draw_result_screen(canvas, left_score, right_score, assets):
     """Draws the result screen."""
-    winner_pos = (Screen.WIDTH // 2, Screen.HEIGHT // 3)
-    winner_font = pygame.font.SysFont(Game.FONT, 50)
     canvas.fill(Color.BLACK)
 
-    winner = Game.p1 if left_score == 5 else Game.p2
-    winner_text = f"{winner} wins!"
-    winner_surface = winner_font.render(winner_text, True, Color.WHITE)
-    winner_rect = winner_surface.get_rect(center=winner_pos)
-    canvas.blit(winner_surface, winner_rect)
+    scanline = assets.scanline
+    canvas.blit(scanline, (0, 0))
 
-    score_pos = (Screen.WIDTH // 2, Screen.HEIGHT // 2)
-    score_font = pygame.font.SysFont(Game.FONT, 30)
-    score_text = f"Score {left_score}:{right_score}"
-    score_surface = score_font.render(score_text, True, Color.WHITE)
-    score_rect = score_surface.get_rect(center=score_pos)
-    canvas.blit(score_surface, score_rect)
+    winner = Game.p1 if left_score == Game.GAME_OVER_SCORE else Game.p2
+    winner_sequence = assets.winner1 if winner == Game.p1 else assets.winner2
+    curr_frame = (pygame.time.get_ticks() // 150) % len(winner_sequence)
+    image = winner_sequence[curr_frame]
+    image_rect = image.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.18))
+    canvas.blit(image, image_rect)
 
-    instruction_pos = (Screen.WIDTH // 2, Screen.HEIGHT * 2 // 3)
-    instruction_font = pygame.font.SysFont(Game.FONT, 20)
-    instruction_surface = instruction_font.render("Press any key", True, Color.WHITE)
-    instruction_rect = instruction_surface.get_rect(center=instruction_pos)
-    canvas.blit(instruction_surface, instruction_rect)
+    text_scan = assets.text_scan
+    text_scan_rect = text_scan.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.70))
+    canvas.blit(text_scan, text_scan_rect)
+
+    text_press = assets.text_press
+    text_press_rect = text_press.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.90))
+    canvas.blit(text_press, text_press_rect)
 
 
-def draw_pause_screen(canvas, game_manager):
+def draw_pause_screen(canvas, game_manager, assets):
     """Draws the pause screen."""
-    message_pos = (Screen.WIDTH // 2, Screen.HEIGHT // 3)
-    instruction_pos = (Screen.WIDTH // 2, Screen.HEIGHT // 2)
-    draw_game_pane(canvas, game_manager)
-    draw_score_pane(canvas, game_manager)
-    draw_log_pane(canvas)
-    font = pygame.font.SysFont("Comic Sans MS", 40)
-    message_surface = font.render(f"{game_manager.last_scorer} scored!", True, Color.WHITE)
-    message_rect = message_surface.get_rect(center=message_pos)
-    canvas.blit(message_surface, message_rect)
+    loser = int(Game.p2[-1]) if game_manager.last_scorer == Game.p1 else int(Game.p1[-1])
+    loser_color = game_manager.get_paddle_color_index(loser)
 
-    instruction_font = pygame.font.SysFont("Comic Sans MS", 30)
-    instruction_surface = instruction_font.render("Press ENTER to continue", True, Color.WHITE)
-    instruction_rect = instruction_surface.get_rect(center=instruction_pos)
-    canvas.blit(instruction_surface, instruction_rect)
+    bg_name = assets.COLORS[loser_color]
+    bg_pos = (0, 0)
+    if loser == 2:
+        bg_name += "_rev"
+        bg_pos = (Screen.WIDTH - assets.goal_backgrounds[bg_name].get_width(), 0)
 
-
-def clear_image_dir():
-    if not os.path.exists(IMAGE_DIR):
-        os.makedirs(IMAGE_DIR)
-    for file in os.listdir(IMAGE_DIR):
-        os.remove(os.path.join(IMAGE_DIR, file))
-
-
-def make_screenshot(canvas, frame_count):
-    filename = os.path.join(IMAGE_DIR, f"frame_{frame_count:04d}.png")
-    pygame.image.save(canvas, filename)
-    with open(filename, "rb") as image_file:
-        image_bytes = image_file.read()
-    return {
-        "mime_type": "image/png",
-        "data": base64.b64encode(image_bytes).decode("utf-8")
-    }
+    canvas.blit(assets.goal_backgrounds[bg_name], bg_pos)
+    curr_frame = (pygame.time.get_ticks() // 150) % len(assets.goal)
+    canvas.blit(assets.goal[curr_frame], (0, 110))
+    draw_game_pane(canvas, game_manager, assets)
+    draw_score_pane(canvas, game_manager, assets)

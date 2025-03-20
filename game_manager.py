@@ -20,9 +20,9 @@ class GameManager:
         """Initializes game state variables and game objects."""
         self.paddle1 = Paddle()
         self.paddle2 = Paddle()
-        paddle1_x = self.paddle1.half_width - 1
-        paddle2_x = Screen.WIDTH - self.paddle2.half_width + 1
-        paddle_y = Screen.GAME_PANE_START_Y + Screen.GAME_PANE_HEIGHT // 2
+        paddle1_x = self.paddle1.rect.width // 2 + 1
+        paddle2_x = Screen.WIDTH - self.paddle2.rect.width // 2 - 1
+        paddle_y = Screen.GAME_PANE_HEIGHT // 2
         self.paddle1.init_location(paddle1_x, paddle_y)
         self.paddle2.init_location(paddle2_x, paddle_y)
         self.ball = Ball(direction=1) if random.randrange(0, 2) == 0 else Ball(direction=-1)
@@ -36,17 +36,17 @@ class GameManager:
 
     def update_ball(self):
         def gutter_check(ball, paddle):
-            if ball.x <= ball.radius + paddle.width:
+            if ball.x <= ball.rect.width // 2 + paddle.rect.width:
                 return "Left"
-            elif ball.x >= Screen.WIDTH - ball.radius - paddle.width:
+            elif ball.x >= Screen.WIDTH - ball.rect.width // 2 - paddle.rect.width:
                 return "Right"
             return False
 
         def collide_check(obj1: pygame.rect, obj2: pygame.rect):
-            return obj1.get_rect().colliderect(obj2.get_rect())
+            return obj1.rect.colliderect(obj2.rect)
 
-        top_border = self.ball.radius + Screen.GAME_PANE_START_Y
-        bottom_border = Screen.GAME_PANE_START_Y + Screen.GAME_PANE_HEIGHT - self.ball.radius
+        top_border = self.ball.radius
+        bottom_border = Screen.GAME_PANE_HEIGHT - self.ball.radius
 
         self.ball.move()
         if self.ball.y <= top_border or self.ball.y >= bottom_border:
@@ -61,6 +61,10 @@ class GameManager:
         if p1_collide or p2_collide:
             self.ball.bounce_x()
             self.ball.accelerate()
+            if p1_collide:
+                self.paddle1.next_image()
+            elif p2_collide:
+                self.paddle2.next_image()
         else:
             if gutter_side == "Left" and not p1_collide:
                 self.right_score += 1
@@ -69,7 +73,7 @@ class GameManager:
                 self.left_score += 1
                 self.last_scorer = Game.p1
 
-            if self.left_score == 5 or self.right_score == 5:
+            if self.left_score == Game.GAME_OVER_SCORE or self.right_score == Game.GAME_OVER_SCORE:
                 self.state = State.RESULT
             else:
                 self.state = State.PAUSE
@@ -101,3 +105,6 @@ class GameManager:
             self.paddle1.stop_moving()
         elif event.key in (pygame.K_UP, pygame.K_DOWN):
             self.paddle2.stop_moving()
+
+    def get_paddle_color_index(self, player):
+        return self.paddle1.index if player == 1 else self.paddle2.index
