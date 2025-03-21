@@ -6,7 +6,7 @@ from config import Screen
 class Ball:
     def __init__(
         self, x=Screen.WIDTH // 2, y=Screen.GAME_PANE_HEIGHT // 2, radius=15,
-        x_vel=12, y_vel=8, multiplier=1.12, direction=1
+        x_vel=7, y_vel=4, multiplier=1.12, direction=1
     ):
         self.x = x
         self.y = y

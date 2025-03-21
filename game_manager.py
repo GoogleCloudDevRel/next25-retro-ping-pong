@@ -25,7 +25,13 @@ class GameManager:
         paddle_y = Screen.GAME_PANE_HEIGHT // 2
         self.paddle1.init_location(paddle1_x, paddle_y)
         self.paddle2.init_location(paddle2_x, paddle_y)
-        self.ball = Ball(direction=1) if random.randrange(0, 2) == 0 else Ball(direction=-1)
+        dir = 1 if random.randrange(0, 2) == 0 else -1
+        self.ball = Ball(
+            x_vel=Game.BALL_VELOCITY_X,
+            y_vel=Game.BALL_VELOCITY_Y,
+            multiplier=Game.BALL_SPEED_MULTIPLIER,
+            direction=dir
+        )
         self.left_score = 0
         self.right_score = 0
         self.state = State.GAME
@@ -61,10 +67,19 @@ class GameManager:
         if p1_collide or p2_collide:
             self.ball.bounce_x()
             self.ball.accelerate()
-            if p1_collide:
-                self.paddle1.next_image()
-            elif p2_collide:
-                self.paddle2.next_image()
+
+            collided_paddle = self.paddle1 if p1_collide else self.paddle2
+            collided_paddle.next_image()
+            paddle_section_height = collided_paddle.rect.height / 4
+            relative_y = self.ball.y - collided_paddle.rect.top
+            section_index = int(relative_y / paddle_section_height)
+
+            if section_index == 0 or section_index == 3:
+                self.ball.y_vel *= 1.2
+            elif section_index == 1 or section_index == 2:
+                self.ball.y_vel *= 0.8
+            max_y_vel = 15
+            self.ball.y_vel = max(-max_y_vel, min(self.ball.y_vel, max_y_vel))
         else:
             if gutter_side == "Left" and not p1_collide:
                 self.right_score += 1

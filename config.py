@@ -58,12 +58,16 @@ class Screen:
 
 
 class Game:
-    FPS = 24
+    FPS = 60
     GAME_OVER_SCORE = 3
     TITLE = "Paddle Bounce"
-    FONT = pygame.font.Font("./assets/font/GoogleSans-Bold.ttf", 40)
+    FONT = pygame.font.Font(pygame.font.get_default_font(), 40)
     p1 = "Player 1"
     p2 = "Player 2"
+    BALL_VELOCITY_X = 8
+    BALL_VELOCITY_Y = 6
+    BALL_SPEED_MULTIPLIER = 1.12
+
 
 
 class Color:
