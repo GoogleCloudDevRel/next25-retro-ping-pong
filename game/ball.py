@@ -1,21 +1,15 @@
 import random
 import pygame
-from config import Screen
 
 
 class Ball:
-    def __init__(
-        self, x=Screen.WIDTH // 2, y=Screen.GAME_PANE_HEIGHT // 2, radius=15,
-        x_vel=7, y_vel=4, multiplier=1.12, direction=1
-    ):
+    def __init__(self, x, y, x_vel, y_vel, multiplier=1.12, direction=1):
         self.x = x
         self.y = y
-        self.radius = radius
         self.x_vel = x_vel * direction
         self.y_vel = y_vel if random.randrange(0, 2) == 0 else -x_vel
         self.multiplier = multiplier
-
-        self.image = pygame.image.load("assets/ball.png")
+        self.image = pygame.image.load("./assets/ball.png")
         self.rect = pygame.Rect(0, 0, 15, 15)
         self.rect.center = (self.x, self.y)
 
@@ -52,3 +46,6 @@ class Ball:
 
     def get_rect(self):
         return self.rect
+
+    def get_radius(self):
+        return self.rect.height

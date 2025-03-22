@@ -64,8 +64,8 @@ class Game:
     FONT = pygame.font.Font(pygame.font.get_default_font(), 40)
     p1 = "Player 1"
     p2 = "Player 2"
-    BALL_VELOCITY_X = 8
-    BALL_VELOCITY_Y = 6
+    BALL_VELOCITY_X = 4
+    BALL_VELOCITY_Y = 3
     BALL_SPEED_MULTIPLIER = 1.12
 
 

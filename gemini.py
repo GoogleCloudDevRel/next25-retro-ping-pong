@@ -1,7 +1,7 @@
 import asyncio
 import pyaudio
 from google.genai import types
-from config import Instruction, Gemini
+from game.config import Instruction, Gemini
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1

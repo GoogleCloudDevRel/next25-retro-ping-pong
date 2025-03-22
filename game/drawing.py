@@ -6,15 +6,14 @@ from config import Color, Screen, Game
 class Assets:
     def __init__(self):
         self.COLORS = ["blue", "green", "red", "yellow"]
-        self.splash_video = cv2.VideoCapture("assets/splash.mp4")
-        self.center_line = pygame.image.load("assets/background/center_line.png")
-
+        self.splash_video = cv2.VideoCapture("./assets/splash.mp4")
+        self.center_line = pygame.image.load("./assets/background/center_line.png")
         self.background = pygame.image.load("./assets/background/background.png")
         self.bottom_pane = pygame.image.load("./assets/background/bottom_pane.png")
-        self.bottom_border = pygame.image.load("assets/background/bottom_border.png")
-        self.text_scan = pygame.image.load("assets/text_headers/scan_for_full_game_summary.png")
-        self.text_press = pygame.image.load("assets/text_headers/press_button_to_skip.png")
-        self.scanline = pygame.image.load("assets/background/scanline.png")
+        self.bottom_border = pygame.image.load("./assets/background/bottom_border.png")
+        self.text_scan = pygame.image.load("./assets/text_headers/scan_for_full_game_summary.png")
+        self.text_press = pygame.image.load("./assets/text_headers/press_button_to_skip.png")
+        self.scanline = pygame.image.load("./assets/background/scanline.png")
 
         self.goal = []
         self.winner1 = []
