@@ -25,12 +25,14 @@ class GameManager:
         paddle_y = Screen.GAME_PANE_HEIGHT // 2
         self.paddle1.init_location(paddle1_x, paddle_y)
         self.paddle2.init_location(paddle2_x, paddle_y)
-        dir = 1 if random.randrange(0, 2) == 0 else -1
+        direction = 1 if random.randrange(0, 2) == 0 else -1
         self.ball = Ball(
+            x=Screen.WIDTH // 2,
+            y=Screen.GAME_PANE_HEIGHT // 2,
             x_vel=Game.BALL_VELOCITY_X,
             y_vel=Game.BALL_VELOCITY_Y,
             multiplier=Game.BALL_SPEED_MULTIPLIER,
-            direction=dir
+            direction=direction
         )
         self.left_score = 0
         self.right_score = 0
@@ -51,8 +53,8 @@ class GameManager:
         def collide_check(obj1: pygame.rect, obj2: pygame.rect):
             return obj1.rect.colliderect(obj2.rect)
 
-        top_border = self.ball.radius
-        bottom_border = Screen.GAME_PANE_HEIGHT - self.ball.radius
+        top_border = self.ball.get_radius()
+        bottom_border = Screen.GAME_PANE_HEIGHT - self.ball.get_radius()
 
         self.ball.move()
         if self.ball.y <= top_border or self.ball.y >= bottom_border:
@@ -103,7 +105,14 @@ class GameManager:
             if event.key == pygame.K_RETURN:
                 self.state = State.GAME
                 direction = 1 if self.last_scorer == Game.p1 else -1
-                self.ball = Ball(direction=direction)
+                self.ball = self.ball = Ball(
+                    x=Screen.WIDTH // 2,
+                    y=Screen.GAME_PANE_HEIGHT // 2,
+                    x_vel=Game.BALL_VELOCITY_X,
+                    y_vel=Game.BALL_VELOCITY_Y,
+                    multiplier=Game.BALL_SPEED_MULTIPLIER,
+                    direction=direction
+                )
         elif self.state == State.GAME:
             if event.key == pygame.K_UP:
                 self.paddle2.move_up()

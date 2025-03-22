@@ -12,21 +12,33 @@ PREBUFFER_FRAMES = 5
 
 
 class GeminiManager:
-    def __init__(self, session, game_manager, pya):
+    def __init__(self, session, pya, loop):
         self.session = session
         self.audio_in_queue = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
         self.out_queue = asyncio.Queue()
         self.send_text_task = None
         self.receive_audio_task = None
         self.play_audio_task = None
-        self.start_tasks()
-        self.game_manager = game_manager
+        # self.start_tasks()
         self.pya = pya
         self.audio_buffer = []
+        self.loop = loop
 
-    def start_tasks(self):
-        asyncio.create_task(self.receive_audio())
-        asyncio.create_task(self.play_audio())
+    async def start_tasks(self):
+        self.receive_audio_task = asyncio.create_task(self.receive_audio())
+        self.play_audio_task = asyncio.create_task(self.play_audio())
+
+    async def cancel_tasks(self):
+        self.receive_audio_task.cancel()
+        self.play_audio_task.cancel()
+        try:
+            await self.receive_audio_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await self.play_audio_task
+        except asyncio.CancelledError:
+            pass
 
     async def send_now(self):
         await self.session.send(input=".", end_of_turn=True)

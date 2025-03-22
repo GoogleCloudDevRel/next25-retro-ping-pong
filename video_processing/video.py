@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime
 import subprocess
 from google.genai import types
-from config import Game
+from game.config import Game
 import pygame
 
 
