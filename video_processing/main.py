@@ -1,129 +1,91 @@
 import asyncio
-import base64
+import time
 import json
-import os
-import traceback
-
-from google.cloud import pubsub_v1
-from concurrent.futures import TimeoutError
-from google.api_core.exceptions import AlreadyExists
-
 import dotenv
 import pyaudio
-from google import genai
-from google.genai import types
-
-from config import Gemini, Instruction, Cloud
-
+from google.cloud import pubsub_v1
 from gemini import GeminiManager
-from video_processor import VideoProcessor
-import pyaudio
+from obs_manager import ObsManager
+from file_manager import FileManager
+from config import Gemini
+
+from google import genai
+
+# Google Cloud Pub/Sub settings
+PROJECT_ID = "data-connect-interactive-demo"
+SUBSCRIPTION_ID = "game_events-sub"
+RECORDING_INTERVAL = 6
 
 dotenv.load_dotenv()
 
 
+def callback(
+    message: pubsub_v1.subscriber.message.Message, obs_manager: ObsManager
+):
+    """Callback function to handle Pub/Sub messages."""
+    try:
+        data = json.loads(message.data.decode())
+        event_type = data.get("event_type")
+        print(f"Received message: data={data}, event_type={event_type}")
+        if event_type == "RECORDING_START":
+            print("Received RECORDING_START event")
+            obs_manager.start_recording()
+        elif event_type == "RECORDING_STOP":
+            print("Received RECORDING_STOP event")
+            obs_manager.stop_recording()
+        message.ack()
+    except Exception as e:
+        print(f"Error processing message: {e}")
+        message.nack()
+
+
 async def main():
-    client = genai.Client(http_options={"api_version": "v1alpha"})
+    """Sets up Pub/Sub subscription, manages recording, and monitors files."""
+    gemini_aio_client = genai.Client(http_options={"api_version": "v1alpha"})
     pya = pyaudio.PyAudio()
-    video_processor = VideoProcessor(
-        segment_duration=7, width=960, height=540, fps=24,
+
+    obs_manager = ObsManager()
+    if not obs_manager.connect():
+        return
+
+    file_manager = FileManager()
+
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
+    streaming_pull_future = subscriber.subscribe(
+        subscription_path, callback=lambda msg: callback(msg, obs_manager)
     )
+    print(f"Listening for messages on {subscription_path}...\n")
 
     try:
-        async with (client.aio.live.connect(
+        async with(gemini_aio_client.aio.live.connect(
             model=Gemini.MODEL, config=Gemini.CONFIG
         ) as session):
-            loop = asyncio.get_running_loop()
-            gemini_manager = GeminiManager(session, pya, loop)
-            await gemini_manager.start_tasks()
-
-            def segment_completed_callback(video_path):
-                process_segment(video_path)
-
-            video_processor.set_segment_completed_callback(
-                segment_completed_callback
-            )
-
-            def process_segment(video_path):
-                print(f"Processing segment: {video_path}")
-                try:
-                    with open(video_path, "rb") as f:
-                        video_bytes = f.read()
-                        video_content = types.Content(
-                            parts=[
-                                types.Part(
-                                    inline_date=types.Blob(
-                                        data=base64.b64encode(video_bytes).decode(
-                                            "utf-8"
-                                        ),
-                                        mime_type="video/mp4",
-                                    )
-                                )
-                            ]
-                        )
-                    asyncio.create_task(
-                        gemini_manager.analyze_video(client, video_content)
-                    )
-                except Exception as e:
-                    print(f"Error processing segment {video_path}: {e}")
-
-            def pubsub_callback(message):
-                try:
-                    data_str = message.data.decode("utf-8")
-                    data = json.loads(data_str)
-                    event_type = data.get("event_type")
-
-                    if event_type == "RECORDING_START":
-                        video_processor.start_recording()
-                        message.ack()
-                    elif event_type == "RECORDING_STOP":
-                        video_processor.stop_recording()
-                        message.ack()
-                    else:
-                        print(f"Unknown event type: {event_type}")
-                        message.nack()
-
-                except Exception as e:
-                    print(f"Error processing message: {e}")
-                    message.nack()
-
-            sub = pubsub_v1.SubscriberClient()
-            sub_path = sub.subscription_path(Cloud.PROJECT_ID, Cloud.SUB_ID)
-
-            try:
-                sub.create_subscription(
-                    request={
-                        "name": sub_path,
-                        "topic": f"projects/{Cloud.PROJECT_ID}/topics/game_events"
-                    }
-                )
-            except AlreadyExists:
-                pass
-
-            streaming_pull_future = sub.subscribe(
-                sub_path, callback=pubsub_callback
-            )
-            print(f"Listening for messages on {sub_path}...")
-
-            try:
+            gemini_manager = GeminiManager(session, pya)
+            with subscriber:
                 while True:
-                    video_processor.process_frame()
-                    await asyncio.sleep(0.05)
-            except KeyboardInterrupt:
-                print("Shutting down...")
-            except TimeoutError:
-                print("Timeout while pulling messages.")
-            except Exception as e:
-                print(f"An error occurred: {e}")
-            finally:
-                video_processor.stop_recording()
-                streaming_pull_future.cancel()
-                streaming_pull_future.result(timeout=5)
-                await gemini_manager.cancel_tasks()
-    except ExceptionGroup as EG:
-        traceback.print_exception(EG)
-    finally:
-        pya.terminate()
+                    if obs_manager.is_recording:
+                        elapsed_time = time.time() - (obs_manager.recording_timer or time.time())
+                        if elapsed_time >= RECORDING_INTERVAL:
+                            obs_manager._update_recording_status()
+                            if obs_manager.is_recording:
+                                obs_manager._restart_recording()
+                    completed_file = file_manager.monitor_folder()
+                    if completed_file:
+                        print(f"Completed file (in main loop): {completed_file}")
+                        await gemini_manager.analyze_video(gemini_aio_client, completed_file)
+                    time.sleep(0.5)  # OBS check interval.
+
+    except TimeoutError:
+        print("Timeout occurred.")
+        streaming_pull_future.cancel()
+    except KeyboardInterrupt:
+        print("Interrupted. Exiting.")
+        streaming_pull_future.cancel()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        streaming_pull_future.cancel()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

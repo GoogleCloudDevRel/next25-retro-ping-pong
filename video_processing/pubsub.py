@@ -26,5 +26,5 @@ def publish_event(project_id, topic_id, event_type):
 if __name__ == "__main__":
     project_id = "data-connect-interactive-demo"
     topic_id = "game_events"
-    # publish_event(project_id, topic_id, "RECORDING_START")
-    publish_event(project_id, topic_id, "RECORDING_STOP")
+    publish_event(project_id, topic_id, "RECORDING_START")
+    # publish_event(project_id, topic_id, "RECORDING_STOP")

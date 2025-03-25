@@ -1,7 +1,9 @@
 import asyncio
+import base64
+
 import pyaudio
 from google.genai import types
-from game.config import Instruction, Gemini
+from config import Instruction, Gemini
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -12,17 +14,16 @@ PREBUFFER_FRAMES = 5
 
 
 class GeminiManager:
-    def __init__(self, session, pya, loop):
+    def __init__(self, session, pya):
         self.session = session
         self.audio_in_queue = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
         self.out_queue = asyncio.Queue()
         self.send_text_task = None
         self.receive_audio_task = None
         self.play_audio_task = None
-        # self.start_tasks()
+        self.start_tasks()
         self.pya = pya
         self.audio_buffer = []
-        self.loop = loop
 
     async def start_tasks(self):
         self.receive_audio_task = asyncio.create_task(self.receive_audio())
@@ -40,30 +41,34 @@ class GeminiManager:
         except asyncio.CancelledError:
             pass
 
-    async def send_now(self):
-        await self.session.send(input=".", end_of_turn=True)
+    # async def send_now(self):
+    #     await self.session.send(input=".", end_of_turn=True)
 
     async def send_text(self, text):
         await self.session.send(input=text, end_of_turn=True)
 
-    async def analyze_video(self, client, video_content):
+    async def analyze_video(self, client, video_path):
         try:
-            response = await client.aio.models.generate_content(
-                model=Gemini.MODEL,
-                config=types.GenerateContentConfig(
-                    system_instruction=Instruction.VIDEO_ANALYSIS
-                ),
-                contents=video_content
-            )
-            print(response.text)
-            await self.send_text(response.text)
+            with open(video_path, "rb") as f:
+                video_bytes = f.read()
+                video_content = types.Content(parts=[types.Part(
+                    inline_data=types.Blob(
+                        data=base64.b64encode(video_bytes).decode("utf-8"),
+                        mime_type="video/mp4",
+                    )
+                )])
+                response = await client.aio.models.generate_content(
+                    model=Gemini.MODEL,
+                    config=types.GenerateContentConfig(
+                        system_instruction=Instruction.VIDEO_ANALYSIS
+                    ),
+                    contents=video_content
+                )
+                print(response.text)
+                await self.session.send(input=response.text, end_of_turn=True)
         # test: "What does the last frame you see? Where is the ball? Can you see 'GOAL' message?"
         except Exception as e:
             print(f"An error occurred during streaming: {e}")
-
-    async def send_image(self, image_bytes):
-        await self.session.send(input=image_bytes, end_of_turn=False)
-        await self.session.send(input=".", end_of_turn=True)
 
     async def receive_audio(self):
         while True:
