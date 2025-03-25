@@ -176,5 +176,7 @@ cython_debug/
 /images
 /videos
 /backup
+/pong
+/paddle
 
 .DS_Store

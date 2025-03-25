@@ -1,5 +1,6 @@
 from enum import Enum
 import pygame
+from google.genai import types
 
 pygame.init()
 CLOCK = pygame.time.Clock()
@@ -44,10 +45,9 @@ class Instruction:
 class Gemini:
     MODEL = "gemini-2.0-flash-exp"
     CONFIG = {
-        "generation_config": {"response_modalities": ["AUDIO"]},
+        "response_modalities": ["AUDIO"],
         "system_instruction": Instruction.LIVE,
     }
-
 
 class Screen:
     WIDTH = 960
@@ -58,7 +58,7 @@ class Screen:
 
 
 class Game:
-    FPS = 60
+    FPS = 24
     GAME_OVER_SCORE = 3
     TITLE = "Paddle Bounce"
     FONT = pygame.font.Font(pygame.font.get_default_font(), 40)
