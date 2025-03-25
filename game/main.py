@@ -4,6 +4,32 @@ from config import State, CLOCK
 from drawing import *
 from game_manager import GameManager
 import cv2
+from google.cloud import pubsub_v1
+import json
+import time
+
+PROJECT_ID = "data-connect-interactive-demo"
+TOPIC_ID = "game_events"
+
+
+def publish_event(project_id, topic_id, event_type):
+    publisher = pubsub_v1.PublisherClient()
+    topic_path = publisher.topic_path(project_id, topic_id)
+    timestamp = time.time()
+
+    message = {
+        "event_type": event_type,
+        "timestamp": timestamp,
+    }
+
+    data = json.dumps(message).encode("utf-8")
+    future = publisher.publish(topic_path, data)
+
+    try:
+        message_id = future.result()
+        print(f"Published message: {message_id} to topic: {topic_path}")
+    except Exception as e:
+        print(f"Error publishing message: {e}")
 
 
 def main():
@@ -12,6 +38,7 @@ def main():
     background_image = assets.background
     splash_video = assets.splash_video
     video_surf = None
+    is_recording = False
 
     while True:
         original_surface = pygame.Surface((Screen.WIDTH, Screen.HEIGHT))
@@ -34,10 +61,16 @@ def main():
             if video_surf:
                 original_surface.blit(video_surf, (0, 0))
         elif game_manager.state == State.GAME:
+            if not is_recording:
+                publish_event(PROJECT_ID, TOPIC_ID, "RECORDING_START")
+                is_recording = True
             draw_game_screen(original_surface, game_manager, assets)
         elif game_manager.state == State.PAUSE:
             draw_pause_screen(original_surface, game_manager, assets)
         elif game_manager.state == State.RESULT:
+            if is_recording:
+                publish_event(PROJECT_ID, TOPIC_ID, "RECORDING_STOP")
+                is_recording = False
             draw_result_screen(original_surface, game_manager.left_score, game_manager.right_score, assets)
 
         scaled_surface = pygame.transform.scale(

@@ -2,3 +2,6 @@ pygame
 python-dotenv
 google-genai
 pyaudio
+opencv-python
+google-cloud-pubsub
+obsws_python
