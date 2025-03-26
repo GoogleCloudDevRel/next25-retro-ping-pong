@@ -1,91 +1,152 @@
 import asyncio
+import stat
 import time
-import json
 import dotenv
 import pyaudio
-from google.cloud import pubsub_v1
-from gemini import GeminiManager
+import os
+import sys
+import atexit
+import functools
+
+from gemini_manager import GeminiManager
 from obs_manager import ObsManager
 from file_manager import FileManager
-from config import Gemini
+from config import Gemini, Instruction
 
 from google import genai
 
-# Google Cloud Pub/Sub settings
-PROJECT_ID = "data-connect-interactive-demo"
-SUBSCRIPTION_ID = "game_events-sub"
-RECORDING_INTERVAL = 6
+RECORDING_INTERVAL = 5
+PIPE_PATH = "/tmp/paddlebounce_pipe"
 
 dotenv.load_dotenv()
 
 
-def callback(
-    message: pubsub_v1.subscriber.message.Message, obs_manager: ObsManager
-):
-    """Callback function to handle Pub/Sub messages."""
+def cleanup_pipe(path):
     try:
-        data = json.loads(message.data.decode())
-        event_type = data.get("event_type")
-        print(f"Received message: data={data}, event_type={event_type}")
-        if event_type == "RECORDING_START":
-            print("Received RECORDING_START event")
-            obs_manager.start_recording()
-        elif event_type == "RECORDING_STOP":
-            print("Received RECORDING_STOP event")
-            obs_manager.stop_recording()
-        message.ack()
+        if os.path.exists(path):
+            os.remove(path)
+            print(f"Cleaned up pipe: {path}")
     except Exception as e:
-        print(f"Error processing message: {e}")
-        message.nack()
+        print(f"Error cleaning up pipe {path}: {e}")
+
+
+def read_pipe_sync(pipe_path, obs_manager, loop):
+    print(f"Pipe reader thread started. Listening on {pipe_path}...")
+    try:
+        with open(pipe_path, 'r') as pipe_file:
+            while True:
+                line = pipe_file.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                command = line.strip()
+                print(f"Pipe reader:Received command: '{command}'")
+                if command == "START":
+                    future = asyncio.run_coroutine_threadsafe(
+                        obs_manager.async_start_recording(), loop
+                    )
+                    print("Pipe reader: Scheduled async_start_recording.")
+                elif command == "STOP":
+                    future = asyncio.run_coroutine_threadsafe(
+                        obs_manager.async_stop_recording(), loop
+                    )
+                    print("Pipe reader: Scheduled async_stop_recording.")
+    except FileNotFoundError:
+        print(f"Pipe reader thread: Error - Pipe '{pipe_path}' was likely removed unexpectedly.", file=sys.stderr)
+    except Exception as e:
+        print(f"Pipe reader thread: An error occurred:{e}", file=sys.stderr)
+    finally:
+        print("Pipe reader thread finished")
 
 
 async def main():
-    """Sets up Pub/Sub subscription, manages recording, and monitors files."""
+    if not os.path.exists(PIPE_PATH):
+        try:
+            os.mkfifo(PIPE_PATH)
+            print(f"Created named pipe: {PIPE_PATH}")
+        except OSError as e:
+            print(f"Failed to create named pipe: {e}", file=sys.stderr)
+            return
+    else:
+        if not stat.S_ISFIFO(os.stat(PIPE_PATH).st_mode):
+            print(f"Error: {PIPE_PATH} exists but is not a FIFO pipe.", file=sys.stderr)
+            try:
+                os.remove(PIPE_PATH)
+                os.mkfifo(PIPE_PATH)
+                print(f"Removed existing file and created named pipe:{PIPE_PATH}")
+            except OSError as e:
+                print(f"Failed to recreated named pipe: {e}", file=sys.stderr)
+                return
+        else:
+            print(f"Named pipe {PIPE_PATH} already exists. Using it.")
+    atexit.register(cleanup_pipe, PIPE_PATH)
+
+    segment_complete_event = asyncio.Event()
+
     gemini_aio_client = genai.Client(http_options={"api_version": "v1alpha"})
     pya = pyaudio.PyAudio()
 
-    obs_manager = ObsManager()
-    if not obs_manager.connect():
+    obs_manager = ObsManager(segment_complete_event=segment_complete_event)
+    if not await obs_manager.async_connect():
+        print("Exiting due to OBS connection failure.")
         return
 
-    file_manager = FileManager()
-
-    subscriber = pubsub_v1.SubscriberClient()
-    subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
-    streaming_pull_future = subscriber.subscribe(
-        subscription_path, callback=lambda msg: callback(msg, obs_manager)
+    file_manager = FileManager(segment_complete_event=segment_complete_event)
+    loop = asyncio.get_running_loop()
+    pipe_reader_task = loop.run_in_executor(
+        None,
+        functools.partial(read_pipe_sync, PIPE_PATH, obs_manager, loop)
     )
-    print(f"Listening for messages on {subscription_path}...\n")
 
     try:
         async with(gemini_aio_client.aio.live.connect(
             model=Gemini.MODEL, config=Gemini.CONFIG
         ) as session):
             gemini_manager = GeminiManager(session, pya)
-            with subscriber:
-                while True:
-                    if obs_manager.is_recording:
-                        elapsed_time = time.time() - (obs_manager.recording_timer or time.time())
-                        if elapsed_time >= RECORDING_INTERVAL:
-                            obs_manager._update_recording_status()
-                            if obs_manager.is_recording:
-                                obs_manager._restart_recording()
-                    completed_file = file_manager.monitor_folder()
-                    if completed_file:
-                        print(f"Completed file (in main loop): {completed_file}")
-                        await gemini_manager.analyze_video(gemini_aio_client, completed_file)
-                    time.sleep(0.5)  # OBS check interval.
+            await gemini_manager.initialize()
 
-    except TimeoutError:
-        print("Timeout occurred.")
-        streaming_pull_future.cancel()
+            while True:
+                completed_file = await file_manager.wait_for_completed_file()
+                if completed_file:
+                    print(f"Main loop: Processing completed file: {completed_file}")
+                    asyncio.create_task(
+                        gemini_manager.analyze_video(gemini_aio_client, completed_file)
+                    )
+                else:
+                    print("Main loop:Signal received, but no file returned by FileManager.")
+
+                if obs_manager.is_recording:
+                    timer_start = obs_manager.recording_timer
+                    if timer_start and (time.time() - timer_start >= RECORDING_INTERVAL):
+                        print(f"Recording interval ({RECORDING_INTERVAL}s) reached (approx).")
+                        if obs_manager.is_recording:
+                            print("Initiating async recording restart...")
+                            asyncio.create_task(obs_manager.async_restart_recording())
+                        else:
+                            print("Recording stopped betweel interval check and restart attempt.")
+                await asyncio.sleep(0.1)
     except KeyboardInterrupt:
-        print("Interrupted. Exiting.")
-        streaming_pull_future.cancel()
+        print("\nKeyboardInterrupt received. Shutting down.")
     except Exception as e:
-        print(f"An error occurred: {e}")
-        streaming_pull_future.cancel()
+        print(f"\nAn unexpected error occurred in the main loop: {e}")
+    finally:
+        print("Starting cleanup...")
+        if obs_manager.is_connected:
+            print("Disconnecting from OBS...")
+            await obs_manager.async_disconnect()
+        if pya:
+            print("Terminating PyAudio...")
+            pya.terminate()
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        if tasks:
+            print(f"Cancelling {len(tasks)} outstanding tasks...")
+            [task.cancel() for task in tasks]
+            await asyncio.gather(*tasks, return_exceptions=True)
+        print("Cleanup complete. Exiting.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nExiting before main loop started.")
