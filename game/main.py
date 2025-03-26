@@ -1,35 +1,34 @@
 import sys
 import pygame.locals
+import os
+import errno
+
 from config import State, CLOCK
 from drawing import *
 from game_manager import GameManager
 import cv2
-from google.cloud import pubsub_v1
-import json
-import time
 
-PROJECT_ID = "data-connect-interactive-demo"
-TOPIC_ID = "game_events"
+PIPE_PATH = "/tmp/paddlebounce_pipe"
 
 
-def publish_event(project_id, topic_id, event_type):
-    publisher = pubsub_v1.PublisherClient()
-    topic_path = publisher.topic_path(project_id, topic_id)
-    timestamp = time.time()
-
-    message = {
-        "event_type": event_type,
-        "timestamp": timestamp,
-    }
-
-    data = json.dumps(message).encode("utf-8")
-    future = publisher.publish(topic_path, data)
-
+def send_pipe_event(event_type):
+    message = (event_type + "\n").encode('utf-8')
     try:
-        message_id = future.result()
-        print(f"Published message: {message_id} to topic: {topic_path}")
+        fd = os.open(PIPE_PATH, os.O_WRONLY | os.O_NONBLOCK)
+        try:
+            bytes_written = os.write(fd, message)
+            print(f"Sent '{event_type}' event via pipe ({bytes_written} bytes).")
+        except OSError as e:
+            if e.errno == errno.EAGAIN or e.errno == errno.EWOULDBLOCK:
+                print(f"Warning: Pipe buffer full when trying to send '{event_type}'. Event might be missed")
+            else:
+                print(f"Error writing to pipe: {e}")
+        finally:
+            os.close(fd)
+    except FileNotFoundError:
+        print(f"Error:Pipe '{PIPE_PATH}' not found. Is the video_processing app running?")
     except Exception as e:
-        print(f"Error publishing message: {e}")
+        print(f"Error opening/writing to pipe: {e}")
 
 
 def main():
@@ -45,6 +44,7 @@ def main():
         original_surface.blit(background_image, (0, 0))
 
         if game_manager.state == State.SPLASH:
+            is_recording = False
             success, video_image = splash_video.read()
             if success:
                 video_image = cv2.resize(video_image, (Screen.WIDTH, Screen.HEIGHT))
@@ -62,14 +62,14 @@ def main():
                 original_surface.blit(video_surf, (0, 0))
         elif game_manager.state == State.GAME:
             if not is_recording:
-                publish_event(PROJECT_ID, TOPIC_ID, "RECORDING_START")
+                send_pipe_event("START")
                 is_recording = True
             draw_game_screen(original_surface, game_manager, assets)
         elif game_manager.state == State.PAUSE:
             draw_pause_screen(original_surface, game_manager, assets)
         elif game_manager.state == State.RESULT:
             if is_recording:
-                publish_event(PROJECT_ID, TOPIC_ID, "RECORDING_STOP")
+                send_pipe_event("STOP")
                 is_recording = False
             draw_result_screen(original_surface, game_manager.left_score, game_manager.right_score, assets)
 

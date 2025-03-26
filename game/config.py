@@ -10,7 +10,7 @@ class Screen:
     HEIGHT = 540
     BOTTOM_PANE_HEIGHT = 85
     GAME_PANE_HEIGHT = HEIGHT - BOTTOM_PANE_HEIGHT
-    FULLSCREEN = False
+    FULLSCREEN = True
 
 
 class Game:
