@@ -89,30 +89,33 @@ class GameManager:
             elif gutter_side == "Right" and not p2_collide:
                 self.left_score += 1
                 self.last_scorer = Game.p1
-
-            if self.left_score == Game.GAME_OVER_SCORE or self.right_score == Game.GAME_OVER_SCORE:
-                self.state = State.RESULT
-            else:
-                self.state = State.PAUSE
+            self.state = State.PAUSE
 
     def handle_keydown(self, event):
         """Handles keydown events and updates game state"""
+        is_return_key = (event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER)
+
         if self.state == State.SPLASH:
-            self.init_game()
+            if is_return_key:
+                self.init_game()
         elif self.state == State.RESULT:
-            self.state = State.SPLASH
+            if is_return_key:
+                self.state = State.SPLASH
         elif self.state == State.PAUSE:
-            if event.key == pygame.K_RETURN:
-                self.state = State.GAME
-                direction = 1 if self.last_scorer == Game.p1 else -1
-                self.ball = self.ball = Ball(
-                    x=Screen.WIDTH // 2,
-                    y=Screen.GAME_PANE_HEIGHT // 2,
-                    x_vel=Game.BALL_VELOCITY_X,
-                    y_vel=Game.BALL_VELOCITY_Y,
-                    multiplier=Game.BALL_SPEED_MULTIPLIER,
-                    direction=direction
-                )
+            if is_return_key:
+                if self.left_score == Game.GAME_OVER_SCORE or self.right_score == Game.GAME_OVER_SCORE:
+                    self.state = State.RESULT
+                else:
+                    self.state = State.GAME
+                    direction = 1 if self.last_scorer == Game.p1 else -1
+                    self.ball = self.ball = Ball(
+                        x=Screen.WIDTH // 2,
+                        y=Screen.GAME_PANE_HEIGHT // 2,
+                        x_vel=Game.BALL_VELOCITY_X,
+                        y_vel=random.uniform(-Game.BALL_VELOCITY_Y, Game.BALL_VELOCITY_Y),
+                        multiplier=Game.BALL_SPEED_MULTIPLIER,
+                        direction=direction
+                    )
         elif self.state == State.GAME:
             if event.key == pygame.K_UP:
                 self.paddle2.move_up()
@@ -125,10 +128,21 @@ class GameManager:
 
     def handle_keyup(self, event):
         """Handles keyup events within the GameManager."""
-        if event.key in (pygame.K_w, pygame.K_s):
-            self.paddle1.stop_moving()
-        elif event.key in (pygame.K_UP, pygame.K_DOWN):
-            self.paddle2.stop_moving()
+        if self.state == State.GAME:
+            if event.key in (pygame.K_w, pygame.K_s):
+                self.paddle1.stop_moving()
+            elif event.key in (pygame.K_UP, pygame.K_DOWN):
+                self.paddle2.stop_moving()
 
     def get_paddle_color_index(self, player):
         return self.paddle1.index if player == 1 else self.paddle2.index
+
+    def handle_pygame_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.locals.KEYDOWN:
+                self.handle_keydown(event)
+            elif event.type == pygame.locals.KEYUP:
+                self.handle_keyup(event)
+            elif event.type == pygame.locals.QUIT:
+                return False  # exit the main loop
+        return True  # continue the main loop

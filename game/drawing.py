@@ -1,19 +1,24 @@
 import cv2
 import pygame
 from config import Color, Screen, Game
+from pathlib import Path
+
+script_dir = Path(__file__).parent.resolve()
+assets_dir = script_dir / "assets"
 
 
 class Assets:
     def __init__(self):
         self.COLORS = ["blue", "green", "red", "yellow"]
-        self.splash_video = cv2.VideoCapture("./assets/splash.mp4")
-        self.center_line = pygame.image.load("./assets/background/center_line.png")
-        self.background = pygame.image.load("./assets/background/background.png")
-        self.bottom_pane = pygame.image.load("./assets/background/bottom_pane.png")
-        self.bottom_border = pygame.image.load("./assets/background/bottom_border.png")
-        self.text_scan = pygame.image.load("./assets/text_headers/scan_for_full_game_summary.png")
-        self.text_press = pygame.image.load("./assets/text_headers/press_button_to_skip.png")
-        self.scanline = pygame.image.load("./assets/background/scanline.png")
+        self.splash_video = cv2.VideoCapture(assets_dir / "splash.mp4")
+        self.center_line = pygame.image.load(assets_dir / "background" / "center_line.png")
+        self.background = pygame.image.load(assets_dir / "background" / "background.png")
+        self.bottom_pane = pygame.image.load(assets_dir / "background" / "bottom_pane.png")
+        self.bottom_border = pygame.image.load(assets_dir / "background" / "bottom_border.png")
+        self.text_scan = pygame.image.load(assets_dir / "text_headers" / "scan_for_full_game_summary.png")
+        self.text_press = pygame.image.load(assets_dir / "text_headers" / "press_button_to_skip.png")
+        self.scanline = pygame.image.load(assets_dir / "background" / "scanline.png")
+        self.ball = pygame.image.load(assets_dir / "ball.png")
 
         self.goal = []
         self.winner1 = []
@@ -21,17 +26,24 @@ class Assets:
 
         def append_sequence(arr, path):
             for i in range(4):
-                image_path = f"{path}{i}.png"
+                image_path = f"{path}/{i}.png"
                 image = pygame.image.load(image_path)
                 arr.append(image)
-        append_sequence(self.goal, "./assets/sequences/goal/")
-        append_sequence(self.winner1, "./assets/sequences/win/p1w_")
-        append_sequence(self.winner2, "./assets/sequences/win/p2w_")
+        append_sequence(self.goal, assets_dir / "sequences" / "goal")
+        append_sequence(self.winner1, assets_dir / "sequences" / "win" / "p1")
+        append_sequence(self.winner2, assets_dir / "sequences" / "win" / "p2")
 
         self.goal_backgrounds = {}
         for color in self.COLORS:
-            self.goal_backgrounds[color] = pygame.image.load(f"./assets/background/{color}.png")
-            self.goal_backgrounds[color+"_rev"] = pygame.image.load(f"./assets/background/{color}_rev.png")
+            self.goal_backgrounds[color] = pygame.image.load(assets_dir / "background" / f"{color}.png")
+            self.goal_backgrounds[color] = pygame.image.load(assets_dir / "background" / f"{color}.png")
+            self.goal_backgrounds[color+"_rev"] = pygame.image.load(assets_dir / "background" / f"{color}_rev.png")
+        
+        self.paddle_images = []
+        for i in range(4):
+            image_path = assets_dir / "paddle" / f"paddle_{i}.png"
+            image = pygame.image.load(image_path)
+            self.paddle_images.append(image)
 
         self.optimize_assets()
 
@@ -40,6 +52,26 @@ class Assets:
         border_w, border_h = self.bottom_border.get_size()
         new_border_h = int(border_h * (Screen.WIDTH / border_w))
         self.bottom_border = pygame.transform.scale(self.bottom_border, (Screen.WIDTH, new_border_h))
+
+
+def draw_splash_screen(canvas, assets):
+    splash_video = assets.splash_video
+    success, video_image = splash_video.read()
+    if success:
+        video_image = cv2.resize(video_image, (Screen.WIDTH, Screen.HEIGHT))
+        video_image = cv2.cvtColor(video_image, cv2.COLOR_BGR2RGB)
+        video_surf = pygame.image.frombuffer(
+            video_image.tobytes(), video_image.shape[1::-1], "RGB"
+        )
+    else:
+        splash_video.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        success, video_image = splash_video.read()
+        if success:
+            video_image = cv2.cvtColor(video_image, cv2.COLOR_BGR2RGB)
+            video_surf = pygame.image.frombuffer(
+                video_image.tobytes(), video_image.shape[1::-1], "RGB")
+    if video_surf:
+        canvas.blit(video_surf, (0, 0))
 
 
 def draw_game_pane(canvas, game_manager, assets):
@@ -66,7 +98,7 @@ def draw_score_pane(canvas, game_manager, assets):
     bottom_border_rect = bottom_border.get_rect(topleft=(0, Screen.HEIGHT - pane_h))
     canvas.blit(bottom_border, bottom_border_rect)
 
-    font = Game.FONT
+    font = pygame.font.Font(pygame.font.get_default_font(), 40)
 
     left_score_str = str(game_manager.left_score)
     right_score_str = str(game_manager.right_score)
@@ -134,3 +166,14 @@ def draw_pause_screen(canvas, game_manager, assets):
     canvas.blit(assets.goal[curr_frame], (0, 110))
     draw_game_pane(canvas, game_manager, assets)
     draw_score_pane(canvas, game_manager, assets)
+
+
+def update_display(original_surface, window):
+    scaled_surface = pygame.transform.scale(
+        original_surface, (
+            pygame.display.Info().current_w,
+            pygame.display.Info().current_h
+        )
+    )
+    window.blit(scaled_surface, (0, 0))
+    pygame.display.update()

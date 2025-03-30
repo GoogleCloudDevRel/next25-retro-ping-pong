@@ -1,15 +1,17 @@
 import random
 import pygame
+from drawing import Assets
 
 
 class Ball:
     def __init__(self, x, y, x_vel, y_vel, multiplier=1.12, direction=1):
+        assets = Assets()
         self.x = x
         self.y = y
         self.x_vel = x_vel * direction
         self.y_vel = y_vel if random.randrange(0, 2) == 0 else -x_vel
         self.multiplier = multiplier
-        self.image = pygame.image.load("./assets/ball.png")
+        self.image = assets.ball
         self.rect = pygame.Rect(0, 0, 15, 15)
         self.rect.center = (self.x, self.y)
 

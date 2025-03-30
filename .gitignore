@@ -179,5 +179,8 @@ cython_debug/
 /pong
 /paddle
 /backup
+/recordings_full_game
+/recordings_short_clips
 
 .DS_Store
+.*

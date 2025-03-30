@@ -1,5 +1,6 @@
 import pygame
 from config import Screen
+from drawing import Assets
 
 
 class Paddle:
@@ -8,12 +9,9 @@ class Paddle:
         self.y = y
         self.speed = speed
         self.y_vel = 0
+        assets = Assets()
 
-        self.images = []
-        for i in range(4):
-            image_path = f"./assets/paddle/paddle_{i}.png"
-            image = pygame.image.load(image_path)
-            self.images.append(image)
+        self.images = assets.paddle_images
         self.index = 0
         self.image = self.images[self.index]
         self.rect = pygame.Rect(0, 0, 10, 100)  # The actual paddle size
