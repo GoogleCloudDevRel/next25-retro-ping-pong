@@ -42,11 +42,14 @@ class GeminiManager:
             self.context_manager = self.client.aio.live.connect(
                 model=Gemini.MODEL, config={
                     "response_modalities": ["AUDIO"],
-                    "system_instruction": Instruction.LIVE,
+                    "system_instruction": Instruction.LIVE2,
+                    "generation_config": {
+                        "temperature": 2
+                    }
                 }
             )
             self.session = await self.context_manager.__aenter__()
-            self.get_access_token()
+            # self.get_access_token()
             print("Gemini connection successful")
         except Exception as e:
             print(f"Failed to connect to Gemini: {e}")
@@ -76,7 +79,7 @@ class GeminiManager:
                     if data:
                         yield data
         except Exception as e:
-            print(f"Error during audio reception: {e}")
+            print(f"Error during audio reception: ")
 
     async def analyze_video(self, client, video_content):
         try:
@@ -87,9 +90,7 @@ class GeminiManager:
                 ),
                 contents=video_content
             )
-            print(response.text)
             await self.send_text(response.text)
-        # test: "What does the last frame you see? Where is the ball? Can you see 'GOAL' message?"
         except Exception as e:
             print(f"An error occurred during streaming: {e}")
 
@@ -122,7 +123,6 @@ class GeminiManager:
 
     async def send_image(self, image_bytes):
         await self.session.send(input=image_bytes, end_of_turn=False)
-        await self.session.send(input=".", end_of_turn=True)
 
     async def generate_content_fps(self, session, video_path):
         """
@@ -211,5 +211,5 @@ class GeminiManager:
             elif response is None:
                 print("[Gemini Task Failed in video_analysis] (returned None)")
             else:
-                 print(f"[Gemini Task Unexpected response for {os.path.basename(video_path)}]")
+                print(f"[Gemini Task Unexpected response for {os.path.basename(video_path)}]")
             return response

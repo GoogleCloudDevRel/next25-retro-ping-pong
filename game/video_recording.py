@@ -4,12 +4,8 @@ import datetime
 import os
 import threading
 import traceback
-try:
-    from common.pipe_manager import PipeManager, PIPE_V2G_PATH, PIPE_G2V_PATH
-except ImportError:
-    import sys
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    from common.pipe_manager import PipeManager, PIPE_V2G_PATH, PIPE_G2V_PATH
+
+from pipe_manager import PipeManager, PIPE_V2G_PATH, PIPE_G2V_PATH
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -17,8 +13,8 @@ PARENT_DIR = os.path.dirname(SCRIPT_DIR)
 CAPTURE_DEVICE_INDEX = 0
 INTERVAL = 10  # Seconds
 
-CLIP_OUTPUT_DIR = os.path.join(PARENT_DIR, "recordings_short_clips")
-FULL_OUTPUT_DIR = os.path.join(PARENT_DIR, "recordings_full_game")
+CAPTURE_DIR = os.path.join(PARENT_DIR, "captures")
+FULL_OUTPUT_DIR = os.path.join(PARENT_DIR, "recordings")
 
 VIDEO_EXTENSION = ".mp4"
 FOURCC = cv2.VideoWriter_fourcc(*'mp4v')

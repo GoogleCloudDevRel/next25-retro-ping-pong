@@ -1,10 +1,11 @@
 import asyncio
+import base64
 import dotenv
 import pygame.locals
-import sys
 import traceback
 import uuid
-import os
+import logging
+
 from config import Game, Screen, State
 from drawing import (
     draw_splash_screen,
@@ -15,55 +16,64 @@ from drawing import (
     Assets
 )
 
-from audio_manager import AudioManager
+from audio_manager import AudioPlayer
 from game_manager import GameManager
-from gemini_manager import GeminiManager
-try:
-    from common.pipe_manager import PipeManager, PIPE_V2G_PATH, PIPE_G2V_PATH
-except ImportError:
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    from common.pipe_manager import PipeManager, PIPE_V2G_PATH, PIPE_G2V_PATH
+from pipe_manager import PipeManager, PIPE_G2V_PATH, PIPE_V2G_PATH
 
 dotenv.load_dotenv()
+log = logging.getLogger(__name__)
 
 
-async def handle_pipe_events(pipe_manager, gemini_manager: GeminiManager):
-    def parse_event(event):
-        try:
-            video_path = event.split("_", 1)[1]
-            if not os.path.exists(video_path):
-                print(f"Error: Video file not found at {video_path}")
-                return None
-            return video_path
-        except IndexError:
-            print(f"Malformed COMPLETE event: Couldn't extract path from '{event}")
-            return None
-
+async def handle_pipe_events(pipe_manager, audio_player):
     received_event = pipe_manager.receive_event()
-    if received_event:
-        print(f"[GameApp] Received event from V2G Pipe: '{received_event}")
-        if received_event.startswith("COMPLETE_") and gemini_manager:
+
+    if not received_event:
+        return
+    # log.debug(f"Received event from V2G Pipe: '{received_event[:100]}'...")
+
+    log_event = received_event[:150] + "..." if len(received_event) > 150 else received_event
+    log.debug(f"Received event from V2G Pipe: '{log_event}'")
+
+    if not audio_player or not audio_player.stream:
+        log.warning(f"AudioPlayer not available, cannot process event: '{log_event}'")
+        return
+
+    try:
+        if received_event.startswith("AUDIO_START_"):
+            log.info("Received AUDIO_START event. Preparing for new audio stream.")
+            audio_player.stop_and_clear_queue()
+
+            log.debug("Requested audio player to stop and clear queue.")
+
+        elif received_event.startswith("CHUNK_"):
+            log.debug("Received CHUNK event.")
             try:
-                video_path = parse_event(received_event)
-                if video_path:
-                    asyncio.create_task(
-                        gemini_manager.generate_content_fps_with_own_session(video_path),
-                        name=f"gemini_task_{os.path.basename(video_path)}"
-                    )
+                encoded_data = received_event.split("_", 1)[1]
+                data_bytes = base64.b64decode(encoded_data.encode('ascii'))
+                log.debug(f"Decoded {len(data_bytes)} bytes of audio data.")
+
+                await audio_player.add_to_queue(data_bytes)
+                log.debug("Added audio chunk to player queue.")
+
+            except (IndexError, ValueError, base64.binascii.Error) as e:
+                log.error(f"Failed to parse or decode CHUNK data: {received_event[:100]}... Error: {e}")
             except Exception as e:
-                print(f"[GameApp] error occurred during event processing by GeminiManager: {e}")
-                traceback.print_exc()
+                 log.error(f"Error handling CHUNK data bytes: {e}", exc_info=True)
+
+        elif received_event.startswith("AUDIO_END_"):
+            log.info("Received AUDIO_END event.")
+            await audio_player.signal_stream_end()
+            log.debug("Signaled end of audio stream to player.")
+
+        else:
+            log.warning(f"Received unknown or unhandled event format: {received_event[:100]}...")
+
+    except Exception as e:
+        log.error(f"Error processing event '{received_event[:100]}...': {e}", exc_info=True)
 
 
 async def main():
-    try:
-        audio_manager = AudioManager()
-        pygame.init()
-    except Exception as e:
-        print(f"Error during Pygame initialization: {e}")
-        if pygame.get_init():
-            pygame.quit()
-        sys.exit(1)
+    pygame.init()
     pygame.display.set_caption(Game.TITLE)
     CLOCK = pygame.time.Clock()
 
@@ -72,67 +82,66 @@ async def main():
     else:
         WINDOW = pygame.display.set_mode((Screen.WIDTH, Screen.HEIGHT))
     original_surface = pygame.Surface((Screen.WIDTH, Screen.HEIGHT))
+
     pipe_manager = PipeManager(PIPE_G2V_PATH, PIPE_V2G_PATH)
     if not pipe_manager.setup_pipes():
         print("Exiting: Failed to set up pipes.")
 
     game_manager = GameManager()
-    gemini_manager = GeminiManager()
+    audio_player = AudioPlayer()
     assets = Assets()
 
-    is_recording = False
     current_game_id = None
     is_running = True
-
-    current_audio_task = None
+    prev_state = None
 
     while is_running:
-        if not gemini_manager.is_connected() and game_manager.state in (State.GAME, State.PAUSE, State.RESULT):
-            await gemini_manager.connect_gemini()
-        elif gemini_manager.is_connected() and game_manager.state == State.SPLASH:
-            print("State is SPLASH. Disconnecting from Gemini...")
-            await gemini_manager.disconnect_gemini()
-        if gemini_manager.is_connected() and not current_audio_task:
-            audio_chunk = gemini_manager.receive_audio_chunks()
-            current_audio_task = asyncio.create_task(
-                audio_manager.play_audio(audio_chunk),
-                name="audio_processing_task",
-            )
-            # await audio_manager.playback_finished.wait()
-            # if audio_task and not audio_task.done():
-            #     await audio_task
-
+        curr_state = game_manager.state
         original_surface.blit(assets.background, (0, 0))
 
-        if game_manager.state == State.SPLASH:
-            if is_recording:
-                pipe_manager.send_event("STOP")
-                is_recording = False
-                current_game_id = None
+        if curr_state == State.SPLASH:
             draw_splash_screen(original_surface, assets)
+            if prev_state == State.RESULT:
+                current_game_id = None
+
         elif game_manager.state == State.GAME:
-            if not is_recording:
+            draw_game_screen(original_surface, game_manager, assets)
+            game_manager.update_paddles()
+            game_manager.update_ball()
+
+            if prev_state == State.SPLASH:
                 current_game_id = str(uuid.uuid4())
                 print(f"Starting recording for game ID: {current_game_id}...")
                 pipe_manager.send_event(f"START_{current_game_id}")
-                is_recording = True
-            draw_game_screen(original_surface, game_manager, assets)
+            elif prev_state == State.PAUSE:
+                # TODO: send RESUME
+                pass
         elif game_manager.state == State.PAUSE:
             draw_pause_screen(original_surface, game_manager, assets)
+            if prev_state == State.GAME:
+                pipe_manager.send_event(f"GOAL_{current_game_id}")
         elif game_manager.state == State.RESULT:
-            if is_recording:
-                pipe_manager.send_event("STOP")
-                is_recording = False
-                # TODO: send to GCS: (current_game_id, game_manager.left_score, game_manager.right_score, full_video)
             draw_result_screen(original_surface, game_manager.left_score, game_manager.right_score, assets)
+            # if prev_state == State.PAUSE:
+            #     pipe_manager.send_event(f"STOP_{current_game_id}")
+                # TODO: send to GCS: (current_game_id, game_manager.left_score, game_manager.right_score, full_video)
 
         update_display(original_surface, WINDOW)
         is_running = game_manager.handle_pygame_events()
-
-        await handle_pipe_events(pipe_manager, gemini_manager)
-
+        await handle_pipe_events(pipe_manager, audio_player)
         CLOCK.tick(Game.FPS)
+        prev_state = curr_state
+        curr_state = game_manager.state
         await asyncio.sleep(0)
+
+    if pipe_manager:
+        if curr_state != State.SPLASH:
+            print("[GameApp] Sending final STOP event on exit.")
+            pipe_manager.send_event("STOP")
+        pipe_manager.close_pipes()
+    if pygame.get_init():
+        pygame.quit()
+    print("[GameApp] Application finished.")
 
 
 if __name__ == '__main__':

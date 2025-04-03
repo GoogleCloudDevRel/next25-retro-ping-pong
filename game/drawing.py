@@ -123,8 +123,6 @@ def draw_score_pane(canvas, game_manager, assets):
 def draw_game_screen(canvas, game_manager, assets):
     draw_game_pane(canvas, game_manager, assets)
     draw_score_pane(canvas, game_manager, assets)
-    game_manager.update_paddles()
-    game_manager.update_ball()
 
 
 def draw_result_screen(canvas, left_score, right_score, assets):
