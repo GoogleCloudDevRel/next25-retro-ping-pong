@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import dotenv
-import pygame.locals
+import pygame
 import traceback
 import uuid
 import logging
@@ -58,7 +58,7 @@ async def handle_pipe_events(pipe_manager, audio_player):
             except (IndexError, ValueError, base64.binascii.Error) as e:
                 log.error(f"Failed to parse or decode CHUNK data: {received_event[:100]}... Error: {e}")
             except Exception as e:
-                 log.error(f"Error handling CHUNK data bytes: {e}", exc_info=True)
+                log.error(f"Error handling CHUNK data bytes: {e}")
 
         elif received_event.startswith("AUDIO_END_"):
             log.info("Received AUDIO_END event.")
@@ -72,16 +72,33 @@ async def handle_pipe_events(pipe_manager, audio_player):
         log.error(f"Error processing event '{received_event[:100]}...': {e}", exc_info=True)
 
 
+def init_joysticks():
+    pygame.joystick.init()
+    joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+    if not joysticks:
+        print("No joysticks found.")
+    else:
+        print(f"Found {len(joysticks)} joystick(s).")
+        for joystick in joysticks:
+            print(f"Joystick name: {joystick.get_name()}")
+            joystick.init()
+
+
 async def main():
     pygame.init()
     pygame.display.set_caption(Game.TITLE)
     CLOCK = pygame.time.Clock()
+    print("init_joysticks starting")
+    init_joysticks()
+    print("init_joysticks completed")
 
     if Screen.FULLSCREEN:
         WINDOW = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     else:
         WINDOW = pygame.display.set_mode((Screen.WIDTH, Screen.HEIGHT))
     original_surface = pygame.Surface((Screen.WIDTH, Screen.HEIGHT))
+
+    print("init pipe manager")
 
     pipe_manager = PipeManager(PIPE_G2V_PATH, PIPE_V2G_PATH)
     if not pipe_manager.setup_pipes():
@@ -142,7 +159,6 @@ async def main():
     if pygame.get_init():
         pygame.quit()
     print("[GameApp] Application finished.")
-
 
 if __name__ == '__main__':
     try:

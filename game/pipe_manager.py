@@ -33,7 +33,7 @@ class PipeManager:
             if e.errno != errno.EEXIST:
                 log.error(f"Error creating or checking pipe {path}")
                 return False
-        except Exception as e:
+        except Exception:
             log.error(f"Unexpected error ensuring pipe exists {path}")
             return False
         return True
