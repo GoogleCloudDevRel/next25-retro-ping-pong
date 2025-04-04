@@ -121,10 +121,6 @@ class Instruction:
 
 class Gemini:
     MODEL = "gemini-2.0-flash-exp"
-    BASE_URL = os.environ.get("API_ENDPOINT")
-    PROJECT_ID = os.environ.get("PROJECT_ID")
-    LOCATION = os.environ.get("LOCATION")
-    KEY_FILE = os.environ.get("SERVICE_ACCOUNT_KEY_FILE")
 
 
 class Screen:

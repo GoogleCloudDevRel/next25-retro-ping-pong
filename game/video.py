@@ -162,7 +162,6 @@ async def send_task(
             wait_timeout = None
             if timer_active and last_send_time is not None:
                 time_since_last_send = time.monotonic() - last_send_time
-                print(time_since_last_send)
                 if time_since_last_send < rally_interval:
                     wait_timeout = rally_interval - time_since_last_send
                 else:
