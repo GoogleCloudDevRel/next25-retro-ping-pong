@@ -24,7 +24,7 @@ dotenv.load_dotenv()
 log = logging.getLogger(__name__)
 
 
-async def handle_pipe_events(pipe_manager, audio_player):
+async def handle_pipe_events(pipe_manager: PipeManager, audio_player: AudioPlayer):
     received_event = pipe_manager.receive_event()
 
     if not received_event:
@@ -119,6 +119,7 @@ async def main():
         if curr_state == State.SPLASH:
             draw_splash_screen(original_surface, assets)
             if prev_state == State.RESULT:
+                pipe_manager.send_event(f"STOP_{current_game_id}")
                 current_game_id = None
 
         elif game_manager.state == State.GAME:
@@ -131,7 +132,7 @@ async def main():
                 print(f"Starting recording for game ID: {current_game_id}...")
                 pipe_manager.send_event(f"START_{current_game_id}")
             elif prev_state == State.PAUSE:
-                # TODO: send RESUME
+                pipe_manager.send_event(f"RESUME_{current_game_id}")
                 pass
         elif game_manager.state == State.PAUSE:
             draw_pause_screen(original_surface, game_manager, assets)
@@ -139,8 +140,8 @@ async def main():
                 pipe_manager.send_event(f"GOAL_{current_game_id}")
         elif game_manager.state == State.RESULT:
             draw_result_screen(original_surface, game_manager.left_score, game_manager.right_score, assets)
-            # if prev_state == State.PAUSE:
-            #     pipe_manager.send_event(f"STOP_{current_game_id}")
+            if prev_state == State.PAUSE:
+                pipe_manager.send_event(f"RESULT_{current_game_id}")
                 # TODO: send to GCS: (current_game_id, game_manager.left_score, game_manager.right_score, full_video)
 
         update_display(original_surface, WINDOW)

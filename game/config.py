@@ -70,30 +70,43 @@ class Instruction:
 
     PROMPT_RALLY = \
         """
-**Objective:** Generate live audio commentary for a game based on a sequence of images showing an ongoing rally.
-**Core Instructions:**
-1.  **Analyze the Image Sequence:** Process the incoming series of images depicting the current rally.
-2.  **Goal Event Detection & Priority:**
-    *   **Identify Goals:** Check if, within the sequence, either the number at the bottom of an image changes OR the word "GOAL" appears in the center of the screen. If either condition is met, a goal event has occurred within that sequence.
-    *   **Prioritize Goal Commentary:** Commentary on a goal event MUST take precedence over all other descriptions of action.
-    *   **Goal Details:** When a goal occurs, state which player scored, the updated score, and briefly comment on the potential impact on the game's outlook.
-3.  **Dynamic Rally Commentary (Non-Goal Events):**
-    *   Describe the ongoing action dynamically.
-    *   Comment on the ball's movement and speed (mention if it seems to be accelerating).
-    *   Describe the players' paddle positioning and their reactions to the ball.
-    *   Based on the ball's trajectory and paddle positions observed in the sequence, try to predict where the ball might be headed next OR describe the intensity of the back-and-forth exchange.
-4.  **Output Constraints:**
-    *   **Conciseness:** Keep the commentary brief and to the point.
-    *   **Tone:** Maintain an engaging, commentator-like tone suitable for audio delivery.
-    *   **Duration:** Each distinct commentary segment must NOT exceed 10 seconds.
+        **Objective:** Generate live audio commentary for a game based on a sequence of images showing an ongoing rally.
+        **Core Instructions:**
+        1. **Analyze the Image Sequence:** Process the incoming series of images depicting the current rally.
+        2. **Dynamic Rally Commentary (Non-Goal Events):**
+          Describe the ongoing action dynamically.
+          Comment on the ball's movement and speed (mention if it seems to be accelerating).
+          Describe the players' paddle positioning and their reactions to the ball.
+          Based on the ball's trajectory and paddle positions observed in the sequence, try to predict where the ball might be headed next OR describe the intensity of the back-and-forth exchange.
+        3. **Output Constraints:**
+          **Conciseness:** Keep the commentary brief and to the point.
+          **Tone:** Maintain an engaging, commentator-like tone suitable for audio delivery.
+          **Duration:** Each distinct commentary segment must NOT exceed 10 seconds.
         """
 
     PROMPT_GOAL = \
         """
-        Analyze the image(s) showing that a goal has just been scored.
-        Identify which player (Player 1 or Player 2) scored the point by observing the ball's final position.
-        Announce the goal enthusiastically! State the *new* score clearly.
-        Briefly celebrate the scorer's success or comment on the significance of the goal in the context of the current match score. Output audio commentary only.
+        **Objective:** Generate enthusiastic audio commentary for a goal just scored, based *strictly* on the provided image of a Paddle Bounce game.
+        **Instructions:**
+        1.  **Analyze Visual Evidence:** Examine the provided image carefully. Pay close attention to:
+            *   The final position of the **ball** (white dot).
+            *   The **numerical score** displayed at the bottom (Left number for Player 1, Right number for Player 2).
+        2.  **Identify the Scorer (Mandatory Image Analysis):**
+            *   **Rule:** The goal was scored *against* the player whose side the ball is currently on or nearest to *after* the goal.
+            *   **Therefore:** If the ball's final position is on the **right side** of the screen (near Player 2's area), **Player 1 (Left)** scored the point.
+            *   If the ball's final position is on the **left side** of the screen (near Player 1's area), **Player 2 (Right)** scored the point.
+            *   Explicitly determine the scorer based *only* on this visual rule.
+        3.  **Identify the New Score (Mandatory Image Analysis):**
+            *   Locate the **two numbers** at the bottom of the screen.
+            *   The number on the **left** is Player 1's *current* score.
+            *   The number on the **right** is Player 2's *current* score.
+            *   Read these numbers **directly from the image**. Do **NOT** invent or assume the score.
+        4.  **Generate Audio Commentary:**
+            *   Start with an excited exclamation (e.g., "GOAL!", "SCORE!", "WHAT A POINT!").
+            *   Clearly state **which player scored** (based on step 2).
+            *   Announce the **new, exact score** by stating both players' scores read from the image (based on step 3). For example: "Player 1 scores! The score is now 1 to 0!" or "That's a point for Player 2! It's now tied, 2-2!".
+            *   (Optional but recommended) Add a brief, relevant comment about the goal or the score situation (e.g., "And Player 1 takes the lead!", "Player 2 claws one back!", "Incredible shot into the corner!").
+        5.  **Output Format:** Output **audio commentary only**. Do not include any introductory or concluding text.
         """
 
     PROMPT_RESULT = \
@@ -119,7 +132,7 @@ class Screen:
     HEIGHT = 540
     BOTTOM_PANE_HEIGHT = 85
     GAME_PANE_HEIGHT = HEIGHT - BOTTOM_PANE_HEIGHT
-    FULLSCREEN = False
+    FULLSCREEN = True
 
 
 class Game:
