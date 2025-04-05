@@ -12,7 +12,7 @@ class Ball:
         self.y_vel = y_vel if random.randrange(0, 2) == 0 else -x_vel
         self.multiplier = multiplier
         self.image = assets.ball
-        self.rect = pygame.Rect(0, 0, 15, 15)
+        self.rect = pygame.Rect(0, 0, 48, 48)
         self.rect.center = (self.x, self.y)
 
     def move(self):
@@ -50,4 +50,4 @@ class Ball:
         return self.rect
 
     def get_radius(self):
-        return self.rect.height
+        return self.rect.width // 2

@@ -4,7 +4,7 @@ from config import Color, Screen, Game
 from pathlib import Path
 
 script_dir = Path(__file__).parent.resolve()
-assets_dir = script_dir / "assets"
+assets_dir = script_dir / "assets_1080"
 
 
 class Assets:
@@ -23,6 +23,12 @@ class Assets:
         self.goal = []
         self.winner1 = []
         self.winner2 = []
+        self.score = []
+        for i in range(4):
+            for j in range(10):
+                score_path = f"{assets_dir}/score/{j}-{i}.png"
+                score_image = pygame.image.load(score_path)
+                self.score.append(score_image)
 
         def append_sequence(arr, path):
             for i in range(4):
@@ -38,20 +44,20 @@ class Assets:
             self.goal_backgrounds[color] = pygame.image.load(assets_dir / "background" / f"{color}.png")
             self.goal_backgrounds[color] = pygame.image.load(assets_dir / "background" / f"{color}.png")
             self.goal_backgrounds[color+"_rev"] = pygame.image.load(assets_dir / "background" / f"{color}_rev.png")
-        
+
         self.paddle_images = []
         for i in range(4):
             image_path = assets_dir / "paddle" / f"paddle_{i}.png"
             image = pygame.image.load(image_path)
             self.paddle_images.append(image)
 
-        self.optimize_assets()
+        # self.optimize_assets()
 
-    def optimize_assets(self):
-        self.center_line = pygame.transform.scale(self.center_line, (50, Screen.GAME_PANE_HEIGHT * 1.2))
-        border_w, border_h = self.bottom_border.get_size()
-        new_border_h = int(border_h * (Screen.WIDTH / border_w))
-        self.bottom_border = pygame.transform.scale(self.bottom_border, (Screen.WIDTH, new_border_h))
+    # def optimize_assets(self):
+        # self.center_line = pygame.transform.scale(self.center_line, (50, Screen.GAME_PANE_HEIGHT * 1.2))
+        # border_w, border_h = self.bottom_border.get_size()
+        # new_border_h = int(border_h * (Screen.WIDTH / border_w))
+        # self.bottom_border = pygame.transform.scale(self.bottom_border, (Screen.WIDTH, new_border_h))
 
 
 def draw_splash_screen(canvas, assets):
@@ -88,36 +94,66 @@ def draw_game_pane(canvas, game_manager, assets):
 
 
 def draw_score_pane(canvas, game_manager, assets):
-    """Draws the score pane with player names and scores."""
+    """Draws the score pane with player names and scores using images."""
     score_pane_bg = assets.bottom_pane
     pane_h = score_pane_bg.get_height()
     score_pane_bg_rect = score_pane_bg.get_rect(topleft=(0, Screen.HEIGHT - pane_h))
     canvas.blit(score_pane_bg, score_pane_bg_rect)
 
     bottom_border = assets.bottom_border
-    bottom_border_rect = bottom_border.get_rect(topleft=(0, Screen.HEIGHT - pane_h))
+    bottom_border_rect = bottom_border.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT - pane_h))
     canvas.blit(bottom_border, bottom_border_rect)
 
-    font = pygame.font.Font(pygame.font.get_default_font(), 40)
+    # --- 점수 이미지 사용 시작 ---
+    # 1. 플레이어별 점수와 색상 인덱스 가져오기
+    left_score = game_manager.left_score # 점수는 정수여야 함
+    right_score = game_manager.right_score # 점수는 정수여야 함
+    p1_index = game_manager.get_paddle_color_index(1) # 왼쪽 플레이어(P1) 색상 인덱스 (0-3)
+    p2_index = game_manager.get_paddle_color_index(2) # 오른쪽 플레이어(P2) 색상 인덱스 (0-3)
 
-    left_score_str = str(game_manager.left_score)
-    right_score_str = str(game_manager.right_score)
-    p1_index = game_manager.get_paddle_color_index(1)
-    p2_index = game_manager.get_paddle_color_index(2)
+    # 2. assets.score 리스트에서 올바른 이미지 인덱스 계산
+    # 인덱스 = 색상_인덱스 * 10 + 점수_숫자
+    try:
+        left_score_image_index = p1_index * 10 + left_score
+        right_score_image_index = p2_index * 10 + right_score
 
-    left_score_surface = font.render(left_score_str, True, Color.arr[p1_index])
-    right_score_surface = font.render(right_score_str, True, Color.arr[p2_index])
+        # 3. 해당 인덱스의 이미지 가져오기
+        left_score_image = assets.score[left_score_image_index]
+        right_score_image = assets.score[right_score_image_index]
 
-    score_pane_y = score_pane_bg_rect.top
-    left_score_rect = left_score_surface.get_rect(center=(
-        Screen.WIDTH // 5, Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
-    ))
-    right_score_rect = right_score_surface.get_rect(center=(
-        Screen.WIDTH - (Screen.WIDTH // 5), Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
-    ))
+        # 4. 이미지 위치 계산 (기존 텍스트 위치 로직 재사용)
+        score_pane_y = score_pane_bg_rect.top
+        left_score_rect = left_score_image.get_rect(center=(
+            Screen.WIDTH // 5, Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
+        ))
+        right_score_rect = right_score_image.get_rect(center=(
+            Screen.WIDTH - (Screen.WIDTH // 5), Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
+        ))
 
-    canvas.blit(left_score_surface, left_score_rect)
-    canvas.blit(right_score_surface, right_score_rect)
+        # 5. 이미지 그리기
+        canvas.blit(left_score_image, left_score_rect)
+        canvas.blit(right_score_image, right_score_rect)
+
+    except IndexError:
+        # 만약 계산된 인덱스가 assets.score 범위를 벗어나면 오류 발생 방지
+        # (예: 점수가 9점을 초과하거나, color_index가 잘못된 경우)
+        print(f"Error: Invalid score image index calculated.")
+        print(f"  Left - Score: {left_score}, Index: {p1_index}, Calc Index: {p1_index * 10 + left_score}")
+        print(f"  Right - Score: {right_score}, Index: {p2_index}, Calc Index: {p2_index * 10 + right_score}")
+        # 오류 발생 시 대체 텍스트 또는 빈 공간 처리 등을 추가할 수 있음
+        # 예: 기본 폰트로 점수 표시
+        font = pygame.font.Font(pygame.font.get_default_font(), 40)
+        fallback_left = font.render(str(left_score), True, Color.WHITE)
+        fallback_right = font.render(str(right_score), True, Color.WHITE)
+        score_pane_y = score_pane_bg_rect.top
+        fb_left_rect = fallback_left.get_rect(center=(
+            Screen.WIDTH // 5, Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
+        ))
+        fb_right_rect = fallback_right.get_rect(center=(
+            Screen.WIDTH - (Screen.WIDTH // 5), Screen.HEIGHT - ((Screen.HEIGHT - score_pane_y) // 2)
+        ))
+        canvas.blit(fallback_left, fb_left_rect)
+        canvas.blit(fallback_right, fb_right_rect)
 
 
 def draw_game_screen(canvas, game_manager, assets):
@@ -161,7 +197,11 @@ def draw_pause_screen(canvas, game_manager, assets):
 
     canvas.blit(assets.goal_backgrounds[bg_name], bg_pos)
     curr_frame = (pygame.time.get_ticks() // 150) % len(assets.goal)
-    canvas.blit(assets.goal[curr_frame], (0, 110))
+    goal_image = assets.goal[curr_frame]
+    goal_rect = goal_image.get_rect()
+    goal_rect.centerx = Screen.WIDTH // 2
+    goal_rect.centery = Screen.HEIGHT * 0.41
+    canvas.blit(goal_image, goal_rect)
     draw_game_pane(canvas, game_manager, assets)
     draw_score_pane(canvas, game_manager, assets)
 

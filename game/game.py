@@ -15,7 +15,6 @@ from drawing import (
     Assets
 )
 
-from audio_manager import AudioPlayer
 from game_manager import GameManager
 from pipe_manager import PipeManager, PIPE_G2V_PATH, PIPE_V2G_PATH
 

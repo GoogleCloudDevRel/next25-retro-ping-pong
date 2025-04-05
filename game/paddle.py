@@ -4,7 +4,7 @@ from drawing import Assets
 
 
 class Paddle:
-    def __init__(self, x=0, y=0, speed=10):
+    def __init__(self, x=0, y=0, speed=20):
         self.x = x
         self.y = y
         self.speed = speed
@@ -14,7 +14,7 @@ class Paddle:
         self.images = assets.paddle_images
         self.index = 0
         self.image = self.images[self.index]
-        self.rect = pygame.Rect(0, 0, 10, 100)  # The actual paddle size
+        self.rect = pygame.Rect(0, 0, 32, 300)  # The actual paddle size
         self.rect.center = (self.x, self.y)
 
     def init_location(self, x, y):

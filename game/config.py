@@ -115,11 +115,11 @@ class Gemini:
 
 
 class Screen:
-    WIDTH = 960
-    HEIGHT = 540
-    BOTTOM_PANE_HEIGHT = 85
+    WIDTH = 1920
+    HEIGHT = 1080
+    BOTTOM_PANE_HEIGHT = 172
     GAME_PANE_HEIGHT = HEIGHT - BOTTOM_PANE_HEIGHT
-    FULLSCREEN = True
+    FULLSCREEN = False
 
 
 class Game:
@@ -128,8 +128,8 @@ class Game:
     TITLE = "Paddle Bounce"
     p1 = "Player 1"
     p2 = "Player 2"
-    BALL_VELOCITY_X = 5
-    BALL_VELOCITY_Y = 2
+    BALL_VELOCITY_X = 12
+    BALL_VELOCITY_Y = 7
     BALL_SPEED_MULTIPLIER = 1.10
 
 
