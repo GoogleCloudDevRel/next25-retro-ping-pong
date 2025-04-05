@@ -84,36 +84,27 @@ class Instruction:
           **Duration:** Each distinct commentary segment must NOT exceed 10 seconds.
         """
 
-    PROMPT_GOAL = \
-        """
-        **Objective:** Generate enthusiastic audio commentary for a goal just scored, based *strictly* on the provided image of a Paddle Bounce game.
+    PROMPT_GOAL_TEMPLATE = """
+        **Objective:** Generate enthusiastic audio commentary for a goal scored in a Paddle Bounce game.
+        **Context:**
+        *   An image showing the game state right after the goal is provided for visual context.
+        *   **Crucial Information:** Player {scorer_name} just scored. The new score is now Player 1: {left_score}, Player 2: {right_score}.
+
         **Instructions:**
-        1.  **Analyze Visual Evidence:** Examine the provided image carefully. Pay close attention to:
-            *   The final position of the **ball** (white dot).
-            *   The **numerical score** displayed at the bottom (Left number for Player 1, Right number for Player 2).
-        2.  **Identify the Scorer (Mandatory Image Analysis):**
-            *   **Rule:** The goal was scored *against* the player whose side the ball is currently on or nearest to *after* the goal.
-            *   **Therefore:** If the ball's final position is on the **right side** of the screen (near Player 2's area), **Player 1 (Left)** scored the point.
-            *   If the ball's final position is on the **left side** of the screen (near Player 1's area), **Player 2 (Right)** scored the point.
-            *   Explicitly determine the scorer based *only* on this visual rule.
-        3.  **Identify the New Score (Mandatory Image Analysis):**
-            *   Locate the **two numbers** at the bottom of the screen.
-            *   The number on the **left** is Player 1's *current* score.
-            *   The number on the **right** is Player 2's *current* score.
-            *   Read these numbers **directly from the image**. Do **NOT** invent or assume the score.
-        4.  **Generate Audio Commentary:**
+        1.  **Use Provided Facts:** Generate commentary based primarily on the **Crucial Information** provided above (scorer and exact score). You may use the image for visual flair or context about the play *leading* to the goal, but the scorer and score *must* match the provided facts.
+        2.  **Generate Audio Commentary:**
             *   Start with an excited exclamation (e.g., "GOAL!", "SCORE!", "WHAT A POINT!").
-            *   Clearly state **which player scored** (based on step 2).
-            *   Announce the **new, exact score** by stating both players' scores read from the image (based on step 3). For example: "Player 1 scores! The score is now 1 to 0!" or "That's a point for Player 2! It's now tied, 2-2!".
-            *   (Optional but recommended) Add a brief, relevant comment about the goal or the score situation (e.g., "And Player 1 takes the lead!", "Player 2 claws one back!", "Incredible shot into the corner!").
-        5.  **Output Format:** Output **audio commentary only**. Do not include any introductory or concluding text.
+            *   Clearly state **which player scored**, using the provided name: "{scorer_name}".
+            *   Announce the **new, exact score**, using the provided numbers: "{left_score}" for Player 1 and "{right_score}" for Player 2. Example: "{scorer_name} scores! The score is now {left_score} to {right_score}!"
+            *   (Optional but recommended) Add a brief, relevant comment about the goal or the score situation, potentially drawing inspiration from the image or score (e.g., "And {scorer_name} takes the lead!", "{scorer_name} ties it up!", "What a comeback!").
+        3.  **Output Format:** Output **audio commentary only**. Do not include any introductory or concluding text about these instructions.
         """
 
     PROMPT_RESULT = \
         """
-        Analyze the final game screen image(s).
-        Identify the winner (Player 1 or Player 2) and the final score.
-        Announce the game result clearly and decisively.
+        Analyze the final game screen image(s). This is not a goal event. 
+        Summarize the entire game and praise the winner.
+        Identify the winner (Player 1 or Player 2) based on the screen
         Provide brief concluding remarks summarizing the match or congratulating the winner on their performance.
         Output audio commentary only.
         """

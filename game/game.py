@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import dotenv
 import pygame
 import traceback
@@ -22,54 +21,6 @@ from pipe_manager import PipeManager, PIPE_G2V_PATH, PIPE_V2G_PATH
 
 dotenv.load_dotenv()
 log = logging.getLogger(__name__)
-
-
-async def handle_pipe_events(pipe_manager: PipeManager, audio_player: AudioPlayer):
-    received_event = pipe_manager.receive_event()
-
-    if not received_event:
-        return
-    # log.debug(f"Received event from V2G Pipe: '{received_event[:100]}'...")
-
-    log_event = received_event[:150] + "..." if len(received_event) > 150 else received_event
-    log.debug(f"Received event from V2G Pipe: '{log_event}'")
-
-    if not audio_player or not audio_player.stream:
-        log.warning(f"AudioPlayer not available, cannot process event: '{log_event}'")
-        return
-
-    try:
-        if received_event.startswith("AUDIO_START_"):
-            log.info("Received AUDIO_START event. Preparing for new audio stream.")
-            audio_player.stop_and_clear_queue()
-
-            log.debug("Requested audio player to stop and clear queue.")
-
-        elif received_event.startswith("CHUNK_"):
-            log.debug("Received CHUNK event.")
-            try:
-                encoded_data = received_event.split("_", 1)[1]
-                data_bytes = base64.b64decode(encoded_data.encode('ascii'))
-                log.debug(f"Decoded {len(data_bytes)} bytes of audio data.")
-
-                await audio_player.add_to_queue(data_bytes)
-                log.debug("Added audio chunk to player queue.")
-
-            except (IndexError, ValueError, base64.binascii.Error) as e:
-                log.error(f"Failed to parse or decode CHUNK data: {received_event[:100]}... Error: {e}")
-            except Exception as e:
-                log.error(f"Error handling CHUNK data bytes: {e}")
-
-        elif received_event.startswith("AUDIO_END_"):
-            log.info("Received AUDIO_END event.")
-            await audio_player.signal_stream_end()
-            log.debug("Signaled end of audio stream to player.")
-
-        else:
-            log.warning(f"Received unknown or unhandled event format: {received_event[:100]}...")
-
-    except Exception as e:
-        log.error(f"Error processing event '{received_event[:100]}...': {e}", exc_info=True)
 
 
 def init_joysticks():
@@ -122,7 +73,6 @@ async def main():
         print("Exiting: Failed to set up pipes.")
 
     game_manager = GameManager()
-    audio_player = AudioPlayer()
     assets = Assets()
 
     current_game_id = None
@@ -154,7 +104,10 @@ async def main():
         elif game_manager.state == State.PAUSE:
             draw_pause_screen(original_surface, game_manager, assets)
             if prev_state == State.GAME:
-                pipe_manager.send_event(f"GOAL_{current_game_id}")
+                scorer = game_manager.last_scorer
+                left = game_manager.left_score
+                right = game_manager.right_score
+                pipe_manager.send_event(f"GOAL_{current_game_id}_{scorer}_{left}_{right}")
         elif game_manager.state == State.RESULT:
             draw_result_screen(original_surface, game_manager.left_score, game_manager.right_score, assets)
             if prev_state == State.PAUSE:
@@ -163,7 +116,6 @@ async def main():
 
         update_display(original_surface, WINDOW)
         is_running = game_manager.handle_pygame_events()
-        await handle_pipe_events(pipe_manager, audio_player)
         CLOCK.tick(Game.FPS)
         prev_state = curr_state
         curr_state = game_manager.state

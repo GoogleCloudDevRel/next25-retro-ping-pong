@@ -8,6 +8,8 @@ import datetime
 
 from pipe_manager import PipeManager, PIPE_V2G_PATH, PIPE_G2V_PATH
 from gemini_manager import GeminiManager
+from audio_manager import AudioPlayer
+import numpy as np
 from config import Instruction
 from google.genai import types
 
@@ -50,10 +52,14 @@ def create_image_part(image_bytes):
 
 async def gemini_audio_listener(
         gemini_manager: GeminiManager,
-        pipe_manager: PipeManager,
+        audio_player: AudioPlayer,
         game_id: str
 ):
     log.info(f"[{game_id}] Gemini audio listener task started.")
+    if not audio_player or not audio_player.stream:
+        log.error(f"[{game_id}] AudioPlayer is not available. Cannot play audio.")
+        return
+
     try:
         while True:
             stream_started = False
@@ -63,37 +69,51 @@ async def gemini_audio_listener(
                     if not data:
                         await asyncio.sleep(0.01)
                         continue
+
+                    # Ensure player is ready before processing
+                    if not audio_player or not audio_player.stream:
+                        log.warning(f"[{game_id}] AudioPlayer became unavailable mid-stream. Skipping chunk.")
+                        continue
+
                     if not stream_started:
-                        log.info(f"[{game_id}] New audio stream detected. Receiving chunks...")
-                        pipe_manager.send_event(f"AUDIO_START_{game_id}")
+                        log.info(f"[{game_id}] New audio stream detected. Clearing queue and preparing for playback...")
+                        # Mimic AUDIO_START: Stop previous stream and clear buffer
+                        audio_player.stop_and_clear_queue()
+                        log.debug(f"[{game_id}] Requested audio player to stop and clear queue.")
                         stream_started = True
 
-                    log.debug(f"[{game_id}] Received audio chunk ({len(data)} bytes).")
-                    encoded_bytes = base64.b64encode(data)
-                    encoded_string = encoded_bytes.decode('ascii')
-                    pipe_manager.send_event(f"CHUNK_{encoded_string}")
+                    log.debug(f"[{game_id}] Received audio chunk ({len(data)} bytes). Adding to player queue.")
+                    # Mimic CHUNK: Add raw bytes directly to the player's queue
+                    await audio_player.add_to_queue(data)
+                    log.debug(f"[{game_id}] Added audio chunk to player queue (qsize: {audio_player.audio_queue.qsize()}).")
+
+                # After the inner loop finishes (Gemini stops sending for this turn)
                 if stream_started:
-                    pipe_manager.send_event(f"AUDIO_END_{game_id}")
+                    # Mimic AUDIO_END: Signal that this logical stream is complete
+                    await audio_player.signal_stream_end()
                     stream_started = False
-                    log.debug(f"[{game_id}] Gemini audio stream finished.")
+                    log.info(f"[{game_id}] Gemini audio stream finished. Signaled end to player.")
                 else:
                     log.debug(f"[{game_id}] No audio chunks received in this iteration.")
+
             except asyncio.CancelledError:
                 log.info(f"[{game_id}] Gemini audio listener task inner loop cancelled.")
-                if stream_started:
-                    pipe_manager.send_event(f"AUDIO_END_{game_id}")
-                raise
+                if stream_started and audio_player and audio_player.stream:
+                    # Ensure end is signaled even if cancelled mid-stream
+                    await audio_player.signal_stream_end()
+                raise  # Re-raise cancellation
             except Exception as e:
                 log.error(f"[{game_id}] Error processing an audio stream: {e}", exc_info=True)
-                if stream_started:
-                    pipe_manager.send_event(f"AUDIO_END_{game_id}")
-                    stream_started = False
-                await asyncio.sleep(1)
+                if stream_started and audio_player and audio_player.stream:
+                    # Try to signal end even on error to potentially clean up state
+                    await audio_player.signal_stream_end()
+                stream_started = False
+                await asyncio.sleep(1)  # Avoid busy-looping on persistent errors
 
     except asyncio.CancelledError:
         log.info(f"[{game_id}] Persistent audio listener task cancelled.")
-    except Exception:
-        log.error(f"[{game_id}] Fatal error in persistent audio listener task")
+    except Exception as e:
+        log.error(f"[{game_id}] Fatal error in persistent audio listener task: {e}", exc_info=True)
     finally:
         log.info(f"[{game_id}] Persistent audio listener task finished.")
 
@@ -152,7 +172,7 @@ async def send_task(
     last_send_time = None  # last time to successfully called send_chunk()
     timer_active = False
     start_sent = False
-    rally_interval = 20.0  # seconds
+    rally_interval = 15.0  # seconds
 
     cap_for_goal_result = None
 
@@ -197,6 +217,10 @@ async def send_task(
                 log.info(f"[{game_id}] Send task wait cancelled.")
                 break
 
+            if isinstance(event, tuple):
+                payload = event[1:]
+                event = event[0]
+
             if event == "START":
                 if not start_sent:
                     log.info(f"[{game_id}] Processing START event in send_task...")
@@ -221,6 +245,7 @@ async def send_task(
                          log.warning(f"[{game_id}] Could not send START prompt, no images captured before stop.")
 
             elif event == "GOAL":
+                scorer, left, right = payload
                 log.info(f"[{game_id}] Processing GOAL event...")
                 timer_active = False
                 while len(gemini_manager.images) == 0 and not stop_event.is_set():
@@ -236,7 +261,10 @@ async def send_task(
                 if len(gemini_manager.images) > 0:
                     try:
                         log.info(f"[{game_id}] Sending GOAL prompt...")
-                        await gemini_manager.send_chunk(Instruction.PROMPT_GOAL)
+                        await gemini_manager.send_chunk(
+                            Instruction.PROMPT_GOAL_TEMPLATE.format(
+                                scorer_name=scorer, left_score=left, right_score=right
+                            ))
                         last_send_time = time.monotonic()
                         log.info(f"[{game_id}] GOAL prompt sent (with {len(list(gemini_manager.images))} images). Timer paused.")
                     except Exception as e:
@@ -303,7 +331,7 @@ async def send_task(
         log.info(f"[{game_id}] Send task finished.")
 
 
-async def stop_game_tasks(game_id, tasks, gemini_manager, stop_event):
+async def stop_game_tasks(game_id, tasks, gemini_manager, audio_player, stop_event):
     """Helper function to stop all tasks associated with a game."""
     log.info(f"[{game_id}] Initiating stop sequence for game tasks...")
 
@@ -311,6 +339,14 @@ async def stop_game_tasks(game_id, tasks, gemini_manager, stop_event):
     if stop_event and not stop_event.is_set():
         log.info(f"[{game_id}] Setting stop event.")
         stop_event.set()
+
+    # 1a. Stop any immediate audio playback (added)
+    if audio_player and audio_player.stream:
+        log.info(f"[{game_id}] Aborting any ongoing audio playback.")
+        try:
+            audio_player.stop_and_clear_queue() # Stop sound quickly
+        except Exception as audio_err:
+            log.error(f"[{game_id}] Error stopping audio player during task shutdown: {audio_err}")
 
     # 2. Cancel all running tasks explicitly
     log.info(f"[{game_id}] Cancelling tasks: {list(tasks.keys())}")
@@ -322,7 +358,6 @@ async def stop_game_tasks(game_id, tasks, gemini_manager, stop_event):
             log.info(f"[{game_id}] Cancel requested for task: {name}")
         elif task:
             log.debug(f"[{game_id}] Task {name} already done.")
-
 
     # 3. Wait for tasks to finish cancellation
     if cancelled_tasks:
@@ -350,6 +385,7 @@ async def stop_game_tasks(game_id, tasks, gemini_manager, stop_event):
 async def main():
     pipe_manager = PipeManager(PIPE_V2G_PATH, PIPE_G2V_PATH)
     gemini_manager = GeminiManager()
+    audio_player = None
     current_game_id = None
     active_tasks = {}
     event_queue = None
@@ -358,6 +394,14 @@ async def main():
     if not pipe_manager.setup_pipes():
         log.error("Failed to set up pipes. Exiting.")
         return
+
+    # --- Initialize Audio Player ---
+    try:
+        audio_player = AudioPlayer()
+        if not audio_player.stream:
+            log.error("Failed to initialize AudioPlayer stream. Audio will not play.")
+    except Exception as e:
+        log.critical(f"Failed to create AudioPlayer instance: {e}", exc_info=True)
 
     log.info("Video app started. Waiting for events from game...")
 
@@ -371,7 +415,6 @@ async def main():
                 log.info(f"Received command: {command}")
 
                 if command.startswith("START_"):
-                    
                     # Cleanup previous game
                     if current_game_id:
                         log.warning(f"[{current_game_id}] Received START while game already active. Stopping previous game first.")
@@ -382,13 +425,14 @@ async def main():
                         capture_stop_event = None
 
                     # start new game
-                    game_id = command.split("START_")[1][:4]
+                    game_id = command.split("START_")[1][:8]
                     current_game_id = game_id
                     log.info(f"[{game_id}] Processing START event...")
 
                     # init resources for the game
                     event_queue = asyncio.Queue()
                     capture_stop_event = asyncio.Event()
+                    gemini_manager.images.clear()
 
                     try:
                         log.info(f"[{game_id}] Connecting to Gemini...")
@@ -398,7 +442,7 @@ async def main():
                         log.info(f"[{game_id}] Connected to Gemini.")
 
                         active_tasks['listener'] = asyncio.create_task(
-                            gemini_audio_listener(gemini_manager, pipe_manager, game_id),
+                            gemini_audio_listener(gemini_manager, audio_player, game_id),
                             name=f"AudioListener_{game_id}"
                         )
 
@@ -406,7 +450,7 @@ async def main():
                             capture_task(game_id, gemini_manager, capture_stop_event),
                             name=f"Capture_{game_id}"
                         )
-                        
+
                         active_tasks['sender'] = asyncio.create_task(
                             send_task(game_id, gemini_manager, event_queue, capture_stop_event),
                             name=f"Sender_{game_id}"
@@ -416,16 +460,17 @@ async def main():
 
                     except Exception:
                         log.error(f"[{game_id}] Error during START PROMPT processing")
-                        await stop_game_tasks(game_id, active_tasks, gemini_manager, capture_stop_event)
+                        await stop_game_tasks(game_id, active_tasks, gemini_manager, audio_player, capture_stop_event)
                         active_tasks.clear()
                         current_game_id = None
                         event_queue = None
                         capture_stop_event = None
+                        await asyncio.sleep(2)
 
                 elif command.startswith("STOP"):
                     game_id = current_game_id
                     log.info(f"[{game_id}] Processing STOP event...")
-                    await stop_game_tasks(game_id, active_tasks, gemini_manager, capture_stop_event)
+                    await stop_game_tasks(game_id, active_tasks, gemini_manager, audio_player, capture_stop_event)
                     active_tasks.clear()
                     current_game_id = None
                     event_queue = None
@@ -433,9 +478,10 @@ async def main():
                     log.info(f"[{game_id}] STOP processing finished.")
 
                 elif command.startswith("GOAL"):
+                    scorer, left, right = command.split("_")[2:]
                     game_id = current_game_id
                     log.info(f"[{game_id}] Received GOAL event. Queueing for send_task.")
-                    await event_queue.put("GOAL")
+                    await event_queue.put(("GOAL", scorer, left, right))
 
                 elif command.startswith("RESUME"):
                     game_id = current_game_id
@@ -467,7 +513,15 @@ async def main():
         if current_game_id:
             await stop_game_tasks(current_game_id, active_tasks, gemini_manager, capture_stop_event)
             active_tasks.clear()
+
+        if audio_player:
+            log.info("Closing AudioPlayer...")
+            await audio_player.close()
+            log.info("AudioPlayer closed.")
+
+        if pipe_manager:
             pipe_manager.close_pipes()
+            log.info("Pipes closed.")
 
 if __name__ == "__main__":
     try:
