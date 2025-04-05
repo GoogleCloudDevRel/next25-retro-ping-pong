@@ -73,24 +73,41 @@ async def handle_pipe_events(pipe_manager: PipeManager, audio_player: AudioPlaye
 
 
 def init_joysticks():
-    pygame.joystick.init()
-    joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
-    if not joysticks:
-        print("No joysticks found.")
-    else:
-        print(f"Found {len(joysticks)} joystick(s).")
-        for joystick in joysticks:
-            print(f"Joystick name: {joystick.get_name()}")
-            joystick.init()
+    """Initializes Pygame joysticks and returns a list of Joystick objects."""
+    initialized_joysticks = [] # Create list to store initialized joysticks
+    try:
+        pygame.joystick.init()
+        count = pygame.joystick.get_count()
+        log.info(f"Pygame reports {count} joystick(s) available.")
+
+        if count == 0:
+            log.warning("No joysticks found by Pygame.")
+            return initialized_joysticks # Return empty list
+
+        for i in range(count):
+            try:
+                joystick = pygame.joystick.Joystick(i)
+                joystick.init() # Initialize the specific joystick instance
+                log.info(f"Initialized Joystick {i}: {joystick.get_name()} (Instance ID: {joystick.get_instance_id()})")
+                initialized_joysticks.append(joystick) # Add the initialized object to our list
+            except pygame.error as e:
+                log.error(f"Failed to initialize joystick {i}: {e}")
+
+    except pygame.error as e:
+        log.error(f"Error during pygame.joystick.init(): {e}")
+
+    # Return the list containing references to the initialized Joystick objects
+    return initialized_joysticks
 
 
 async def main():
     pygame.init()
     pygame.display.set_caption(Game.TITLE)
     CLOCK = pygame.time.Clock()
-    print("init_joysticks starting")
-    init_joysticks()
-    print("init_joysticks completed")
+    active_joysticks = init_joysticks()
+    if not active_joysticks:
+        log.warning("Initialization returned no active joysticks. Controls may be limited.")
+    log.info(f"Joystick initialization complete. {len(active_joysticks)} joystick(s) ready.")
 
     if Screen.FULLSCREEN:
         WINDOW = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)

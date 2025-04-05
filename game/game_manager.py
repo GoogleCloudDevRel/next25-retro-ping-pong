@@ -2,9 +2,12 @@
 import random
 import pygame
 import pygame.locals  # Import locals explicitly
+import logging
 from config import State, Screen, Game
 from ball import Ball
 from paddle import Paddle
+
+log = logging.getLogger(__name__)
 
 class GameManager:
     def __init__(self):
@@ -163,10 +166,13 @@ class GameManager:
 
     def handle_joystick_axis(self, event):
         """Handles joystick axis motion."""
-        # event attributes: joy, axis, value
+        # event attributes: joy (or instance_id), axis, value
+        # Value range is -1.0 to 1.0
+        log.debug(f"Handling JOYAXISMOTION - Joy: {event.joy}, Axis: {event.axis}, Value: {event.value:.4f}")
         if self.state == State.GAME:
             # Ensure paddles exist
             if not self.paddle1 or not self.paddle2:
+                log.warning("Joystick axis ignored: Paddles not initialized in GAME state.")
                 return
 
             # Check if it's the vertical axis we care about
@@ -178,25 +184,93 @@ class GameManager:
                     elif event.value > self.JOYSTICK_DEADZONE: # Down
                         self.paddle1.move_down()
                     else: # Center (within deadzone)
-                        self.paddle1.stop_moving()
+                        # Only stop if it was previously moving due to joystick
+                        if abs(self.paddle1.speed) > 0: # Check if paddle has non-zero speed
+                             log.debug(f"Joystick {event.joy} Axis {event.axis} in deadzone, stopping paddle 1.")
+                             self.paddle1.stop_moving()
+
                 # Player 2 Control (Joystick ID 1)
                 elif event.joy == self.PLAYER2_JOYSTICK_ID:
                     # Check if the second joystick exists and is initialized
-                    if pygame.joystick.get_count() > self.PLAYER2_JOYSTICK_ID:
-                        if event.value < -self.JOYSTICK_DEADZONE: # Up
-                            self.paddle2.move_up()
-                        elif event.value > self.JOYSTICK_DEADZONE: # Down
-                            self.paddle2.move_down()
-                        else: # Center (within deadzone)
+                    # Note: Pygame's event already ensures the joystick exists if event.joy is valid
+                    if event.value < -self.JOYSTICK_DEADZONE: # Up
+                        self.paddle2.move_up()
+                    elif event.value > self.JOYSTICK_DEADZONE: # Down
+                        self.paddle2.move_down()
+                    else: # Center (within deadzone)
+                         # Only stop if it was previously moving due to joystick
+                        if abs(self.paddle2.speed) > 0:
+                            log.debug(f"Joystick {event.joy} Axis {event.axis} in deadzone, stopping paddle 2.")
                             self.paddle2.stop_moving()
 
-    def handle_joystick_button(self, event):
+    def handle_joystick_button_down(self, event):
         """Handles joystick button presses."""
-        # event attributes: joy, button
+        # event attributes: joy (or instance_id), button
+        log.debug(f"Handling JOYBUTTONDOWN - Joy: {event.joy}, Button: {event.button}")
         if event.button in self.CONFIRM_BUTTONS:
             # Allow confirm button from any connected joystick
-            print(f"Confirm button {event.button} pressed on joystick {event.joy}")
+            log.info(f"Confirm button {event.button} pressed on joystick {event.joy}")
             self._handle_confirm_action()
+        # Add other button actions here if needed
+
+    def handle_joystick_button_up(self, event):
+        """Handles joystick button releases."""
+        # event attributes: joy (or instance_id), button
+        log.debug(f"Handling JOYBUTTONUP - Joy: {event.joy}, Button: {event.button}")
+        # Add actions for button releases if needed
+
+    def handle_joystick_hat(self, event):
+        """Handles joystick hat (D-pad) motion."""
+        # event attributes: joy (or instance_id), hat, value (tuple, e.g., (0, 1) for up)
+        log.debug(f"Handling JOYHATMOTION - Joy: {event.joy}, Hat: {event.hat}, Value: {event.value}")
+        if self.state == State.GAME:
+            if not self.paddle1 or not self.paddle2:
+                 log.warning("Joystick hat ignored: Paddles not initialized in GAME state.")
+                 return
+
+            hat_x, hat_y = event.value
+
+            # Player 1 Control (Joystick ID 0)
+            if event.joy == self.PLAYER1_JOYSTICK_ID:
+                if hat_y > 0: # D-Pad Up
+                    self.paddle1.move_up()
+                elif hat_y < 0: # D-Pad Down
+                    self.paddle1.move_down()
+                elif hat_y == 0: # D-Pad Vertical Release
+                    if abs(self.paddle1.speed) > 0:
+                        self.paddle1.stop_moving()
+
+            # Player 2 Control (Joystick ID 1)
+            elif event.joy == self.PLAYER2_JOYSTICK_ID:
+                if hat_y > 0: # D-Pad Up
+                    self.paddle2.move_up()
+                elif hat_y < 0: # D-Pad Down
+                    self.paddle2.move_down()
+                elif hat_y == 0: # D-Pad Vertical Release
+                    if abs(self.paddle2.speed) > 0:
+                        self.paddle2.stop_moving()
+
+            # Add horizontal hat control if needed (hat_x)
+
+    def handle_joystick_added(self, event):
+        """Handles joystick connection."""
+        # event attributes: device_index
+        log.info(f"JOYDEVICEADDED - Joystick added at index: {event.device_index}")
+        # You might want to re-initialize the specific joystick here
+        try:
+            new_joy = pygame.joystick.Joystick(event.device_index)
+            log.info(f"   Name: {new_joy.get_name()}")
+            new_joy.init() # Initialize the newly added joystick
+        except pygame.error as e:
+            log.error(f"   Error initializing added joystick {event.device_index}: {e}")
+
+
+    def handle_joystick_removed(self, event):
+        """Handles joystick disconnection."""
+        # event attributes: instance_id (use this to know *which* joystick was removed)
+        log.info(f"JOYDEVICEREMOVED - Joystick removed, instance ID: {event.instance_id}")
+        # Add logic here if you need to handle a player losing their controller mid-game
+        # e.g., pause the game, disable the corresponding paddle
 
     def get_paddle_color_index(self, player):
         # Ensure paddles exist before accessing index
@@ -209,24 +283,46 @@ class GameManager:
     def handle_pygame_events(self):
         """Processes all Pygame events, including keyboard and joystick."""
         for event in pygame.event.get():
+            # --- Universal Exit ---
             if event.type == pygame.locals.QUIT:
+                log.info("QUIT event received. Signalling exit.")
                 return False  # exit the main loop
 
-            # Keyboard Events
+            # --- Keyboard Events ---
             elif event.type == pygame.locals.KEYDOWN:
+                # Log ALL keydown events for debugging (optional)
+                # log.debug(f"KEYDOWN: Scancode={event.scancode}, Key={event.key} ('{pygame.key.name(event.key)}'), Mod={event.mod}")
                 self.handle_keydown(event)
             elif event.type == pygame.locals.KEYUP:
+                # log.debug(f"KEYUP: Scancode={event.scancode}, Key={event.key} ('{pygame.key.name(event.key)}'), Mod={event.mod}")
                 self.handle_keyup(event)
 
-            # Joystick Events
+            # --- Joystick Events ---
             elif event.type == pygame.locals.JOYAXISMOTION:
-                # Optional: print axis events for debugging
-                print(f"Joy: {event.joy}, Axis: {event.axis}, Value: {event.value:.2f}")
-                self.handle_joystick_axis(event)
+                 # *** LOGGING ADDED HERE ***
+                 # Using log.debug for less clutter, change to log.info if needed
+                 log.debug(f"[Joystick Raw] Type: JOYAXISMOTION, Joy: {event.joy}, Axis: {event.axis}, Value: {event.value:.4f}")
+                 self.handle_joystick_axis(event)
             elif event.type == pygame.locals.JOYBUTTONDOWN:
-                # Optional: print button events for debugging
-                print(f"Joy: {event.joy}, Button: {event.button}")
-                self.handle_joystick_button(event)
-            # Add JOYBUTTONUP, JOYHATMOTION etc. if needed later
+                 # *** LOGGING ADDED HERE ***
+                 log.debug(f"[Joystick Raw] Type: JOYBUTTONDOWN, Joy: {event.joy}, Button: {event.button}")
+                 self.handle_joystick_button_down(event) # Changed to specific down handler
+            elif event.type == pygame.locals.JOYBUTTONUP:
+                 # *** LOGGING ADDED HERE ***
+                 log.debug(f"[Joystick Raw] Type: JOYBUTTONUP, Joy: {event.joy}, Button: {event.button}")
+                 self.handle_joystick_button_up(event) # Added handler call
+            elif event.type == pygame.locals.JOYHATMOTION:
+                 # *** LOGGING ADDED HERE ***
+                 # Value is a tuple (x, y) like (-1, 0) left, (1, 0) right, (0, 1) up, (0, -1) down, (0, 0) center
+                 log.debug(f"[Joystick Raw] Type: JOYHATMOTION, Joy: {event.joy}, Hat: {event.hat}, Value: {event.value}")
+                 self.handle_joystick_hat(event) # Added handler call
+            elif event.type == pygame.locals.JOYDEVICEADDED:
+                 # *** LOGGING ADDED HERE ***
+                 log.info(f"[Joystick Raw] Type: JOYDEVICEADDED, Index: {event.device_index}")
+                 self.handle_joystick_added(event) # Added handler call
+            elif event.type == pygame.locals.JOYDEVICEREMOVED:
+                 # *** LOGGING ADDED HERE ***
+                 log.info(f"[Joystick Raw] Type: JOYDEVICEREMOVED, Instance ID: {event.instance_id}")
+                 self.handle_joystick_removed(event) # Added handler call
 
         return True  # continue the main loop
