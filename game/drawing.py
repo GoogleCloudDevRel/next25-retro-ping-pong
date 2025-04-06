@@ -15,10 +15,12 @@ class Assets:
         self.background = pygame.image.load(assets_dir / "background" / "background.png")
         self.bottom_pane = pygame.image.load(assets_dir / "background" / "bottom_pane.png")
         self.bottom_border = pygame.image.load(assets_dir / "background" / "bottom_border.png")
-        self.text_scan = pygame.image.load(assets_dir / "text_headers" / "scan_for_full_game_summary.png")
+        self.text_scan = pygame.image.load(assets_dir / "text_headers" / "text_scan.png")
         self.text_press = pygame.image.load(assets_dir / "text_headers" / "press_button_to_skip.png")
         self.scanline = pygame.image.load(assets_dir / "background" / "scanline.png")
         self.ball = pygame.image.load(assets_dir / "ball.png")
+        self.cookbook = pygame.image.load(assets_dir / "cookbook.png")
+        self.github = pygame.image.load(assets_dir / "github.png")
 
         self.goal = []
         self.winner1 = []
@@ -139,12 +141,23 @@ def draw_result_screen(canvas, left_score, right_score, assets):
     image_rect = image.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.18))
     canvas.blit(image, image_rect)
 
+    qr = assets.cookbook
+    # qr = assets.github
+    qr_original_w, qr_original_h = qr.get_size()
+    new_w, new_h = int(qr_original_w * 0.5), int(qr_original_h * 0.5)
+    qr = pygame.transform.scale(qr, (new_w, new_h))
+    qr_rect = qr.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.55))
+    canvas.blit(qr, qr_rect)
+
     text_scan = assets.text_scan
-    text_scan_rect = text_scan.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.70))
+    text_original_w, text_original_h = text_scan.get_size()
+    new_w, new_h = int(text_original_w * 0.5), int(text_original_h * 0.5)
+    text_scan = pygame.transform.scale(text_scan, (new_w, new_h))
+    text_scan_rect = text_scan.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.80))
     canvas.blit(text_scan, text_scan_rect)
 
     text_press = assets.text_press
-    text_press_rect = text_press.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.90))
+    text_press_rect = text_press.get_rect(center=(Screen.WIDTH // 2, Screen.HEIGHT * 0.85))
     canvas.blit(text_press, text_press_rect)
 
 
