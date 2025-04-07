@@ -1,20 +1,28 @@
+import os
+
 from config import Gemini, Instruction
-from google import genai, auth
+from google import genai
 from google.genai import types
 from pathlib import Path
 from collections import deque
+from google.oauth2 import service_account
 
+credentials = service_account.Credentials.from_service_account_file(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 script_dir = Path(__file__).parent.resolve()
 assets_dir = script_dir / "assets"
 
 
 class GeminiManager:
     def __init__(self):
-        self.client = genai.Client(http_options={"api_version": "v1alpha"})
+        self.client = genai.Client(
+            vertexai=True,
+            http_options=types.HttpOptions(api_version="v1beta1"),
+            credentials=credentials,
+        )
         self.session = None
         self.context_manager = None
         self.send_text_task = None
-        self.images = deque(maxlen=10)
+        self.images = deque(maxlen=20)
 
     def is_connected(self):
         return self.session is not None
@@ -24,7 +32,7 @@ class GeminiManager:
             self.context_manager = self.client.aio.live.connect(
                 model=Gemini.MODEL, config={
                     "response_modalities": ["AUDIO"],
-                    "system_instruction": Instruction.LIVE2,
+                    "system_instruction": Instruction.LIVE,
                     "generation_config": {
                         "temperature": 2
                     }
@@ -47,6 +55,9 @@ class GeminiManager:
             print("Gemini connection Closed.")
         except Exception as e:
             print(f"Error during Gemini disconnection: {e}") 
+
+    async def send(self, prompt, end_of_turn):
+        await self.session.send(input=prompt, end_of_turn=end_of_turn)
 
     async def send_chunk(self, prompt_text):
         prompt = types.Part(text=prompt_text)

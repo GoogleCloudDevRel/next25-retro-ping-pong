@@ -44,8 +44,6 @@ The application runs as two main Python processes:
     *   Handles user input (keyboard, joystick).
     *   Renders game graphics and assets.
     *   Sends game state events (START, GOAL, RESUME, RESULT, STOP) to the Video Process via a named pipe (`/tmp/paddlebounce_pipe_g2v`).
-    *   Receives audio stream events (AUDIO_START, CHUNK, AUDIO_END) from the Video Process via another named pipe (`/tmp/paddlebounce_pipe_v2g`).
-    *   Plays the received audio chunks using `audio_manager.py`.
 
 2.  **Video Process (`video.py`):**
     *   Captures frames from a connected capture card using OpenCV (`cv2`).
@@ -53,17 +51,17 @@ The application runs as two main Python processes:
     *   Connects to the Gemini Live API using `gemini_manager.py`.
     *   Sends captured video frames (encoded as PNG/base64) and contextual text prompts (based on game events) to Gemini.
     *   Receives streaming audio data back from Gemini.
-    *   Encodes and sends the audio data (chunk by chunk) along with stream markers (AUDIO_START, AUDIO_END) to the Game Process via the other named pipe.
+    *   Plays the received audio chunks using `audio_manager.py`.
 
 **Communication:** Inter-process communication (IPC) relies on two named pipes (FIFOs) managed by `pipe_manager.py`:
 *   `/tmp/paddlebounce_pipe_g2v`: Game -> Video (Events like START, GOAL, RESULT)
-*   `/tmp/paddlebounce_pipe_v2g`: Video -> Game (Audio commands like AUDIO_START, CHUNK, AUDIO_END)
+*   `/tmp/paddlebounce_pipe_v2g`: Video -> Game
 
 ## Technology Stack
 
 *   **Language:** Python 3.9+ (leveraging `asyncio` extensively)
 *   **Game Engine:** Pygame
-*   **AI Model:** Google Gemini (via `google-genai` SDK, specifically the Live API)
+*   **AI Model:** Google Gemini 2.0  via `google-genai` SDK, specifically the Live API
 *   **Video Capture:** OpenCV (`opencv-python`)
 *   **Audio Playback:** SoundDevice (`sounddevice`) + NumPy
 *   **IPC:** Linux Named Pipes (FIFOs) via Python's `os` module.

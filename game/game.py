@@ -1,10 +1,14 @@
 import asyncio
 import dotenv
 import pygame
+import os
 import traceback
 import uuid
 import logging
+import datetime
 
+from google.oauth2 import service_account
+from google.cloud import logging as cloud_logging
 from config import Game, Screen, State
 from drawing import (
     draw_splash_screen,
@@ -15,12 +19,25 @@ from drawing import (
     Assets
 )
 
-from audio_manager import AudioPlayer
 from game_manager import GameManager
 from pipe_manager import PipeManager, PIPE_G2V_PATH, PIPE_V2G_PATH
 
 dotenv.load_dotenv()
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
+
+credentials = service_account.Credentials.from_service_account_file(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+
+try:
+    logging_client = cloud_logging.Client(credentials=credentials)
+    LOG_NAME = "paddle_bounce_game_results"
+    cloud_logger = logging_client.logger(LOG_NAME)
+    log.info(f"Google Cloud Logging client initialized. Will log results to: {LOG_NAME}")
+except Exception as e:
+    log.error(f"Failed to initialize Google Cloud Logging client: {e}", exc_info=True)
+    log.warning("Game results will NOT be sent to Google Cloud Logging.")
+    logging_client = None
+    cloud_logger = None
 
 
 def init_joysticks():
@@ -94,7 +111,7 @@ async def main():
             game_manager.update_paddles()
             game_manager.update_ball()
 
-            if prev_state == State.SPLASH:
+            if prev_state == State.SPLASH:  
                 current_game_id = str(uuid.uuid4())
                 print(f"Starting recording for game ID: {current_game_id}...")
                 pipe_manager.send_event(f"START_{current_game_id}")
@@ -112,7 +129,21 @@ async def main():
             draw_result_screen(original_surface, game_manager.left_score, game_manager.right_score, assets)
             if prev_state == State.PAUSE:
                 pipe_manager.send_event(f"RESULT_{current_game_id}")
-                # TODO: send to GCS: (current_game_id, game_manager.left_score, game_manager.right_score, full_video)
+                log.info(f"Sent RESULT event for game ID: {current_game_id}")
+                if cloud_logger:
+                    try:
+                        log_payload = {
+                            "gameId": current_game_id,
+                            "leftScore": game_manager.left_score,
+                            "rightScore": game_manager.right_score,
+                            "gameEndTimeUtc": datetime.datetime.utcnow().isoformat() + "Z"
+                        }
+                        cloud_logger.log_struct(log_payload, severity="INFO")
+                        log.info(f"Successfully logged result for game {current_game_id} to Cloud Logging.")
+                    except Exception as e:
+                        log.error(f"Failed to log result for game {current_game_id} to Cloud Logging: {e}", exc_info=True)
+                else:
+                    log.warning(f"Cloud Logging client not available. Skipping result logging for game {current_game_id}.")
 
         update_display(original_surface, WINDOW)
         is_running = game_manager.handle_pygame_events()

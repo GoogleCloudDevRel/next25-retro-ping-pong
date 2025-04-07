@@ -10,27 +10,38 @@ from pipe_manager import PipeManager, PIPE_V2G_PATH, PIPE_G2V_PATH
 from gemini_manager import GeminiManager
 from audio_manager import AudioPlayer
 import numpy as np
-from config import Instruction
+from config import Instruction, Screen
 from google.genai import types
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s')
 log = logging.getLogger(__name__)
 
 
-def capture_and_encode_frame(cap):
+def capture_and_encode_frame(cap, width=Screen.CAPTURE_WIDTH, height=Screen.CAPTURE_HEIGHT, jpeg_quality=Screen.CAPTURE_QUALITY):
     try:
         ret, frame = cap.read()
         if not ret:
             log.warning("Failed to capture frame from camera.")
             return None
-        ret, buffer = cv2.imencode('.png', frame)
+        try:
+            resized_frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+        except Exception as resize_err:
+            log.error(f"Error during frame resize: {resize_err}", exc_info=True)
+            resized_frame = frame
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
+        ret, buffer = cv2.imencode('.jpg', resized_frame, encode_param)
+
+        if not ret:
+            log.warning("Failed to encode frame to JPEG.")
+            return None
+
         # Save frame for debugging
-        """
         SAVE_DIRECTORY = "captured_frames"
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         os.makedirs(SAVE_DIRECTORY, exist_ok=True)
-        filename = os.path.join(SAVE_DIRECTORY, f"frame_{timestamp}.png")
+        filename = os.path.join(SAVE_DIRECTORY, f"frame_{timestamp}.jpg")
         save_success = cv2.imwrite(filename, frame)
+        """
         """
         if not ret:
             log.warning("Failed to encode frame to PNG.")
@@ -44,7 +55,7 @@ def capture_and_encode_frame(cap):
 def create_image_part(image_bytes):
     return types.Part(
         inline_data={
-            "mime_type": "image/png",
+            "mime_type": "image/jpg",
             "data": base64.b64encode(image_bytes).decode("utf-8"),
         }
     )
@@ -172,7 +183,7 @@ async def send_task(
     last_send_time = None  # last time to successfully called send_chunk()
     timer_active = False
     start_sent = False
-    rally_interval = 15.0  # seconds
+    rally_interval = 10.0  # seconds
 
     cap_for_goal_result = None
 
@@ -418,7 +429,7 @@ async def main():
                     # Cleanup previous game
                     if current_game_id:
                         log.warning(f"[{current_game_id}] Received START while game already active. Stopping previous game first.")
-                        await stop_game_tasks(current_game_id, active_tasks, gemini_manager, capture_stop_event)
+                        await stop_game_tasks(current_game_id, active_tasks, gemini_manager, audio_player, capture_stop_event)
                         active_tasks.clear()
                         current_game_id = None
                         event_queue = None
@@ -500,7 +511,7 @@ async def main():
                 log.error("Error in main event loop")
                 if current_game_id:
                     log.error(f"[{current_game_id}] Shutting down due to error in main loop.")
-                    await stop_game_tasks(current_game_id, active_tasks, gemini_manager, capture_stop_event)
+                    await stop_game_tasks(current_game_id, active_tasks, gemini_manager, audio_player, capture_stop_event)
                     active_tasks.clear()
                     current_game_id = None
                     event_queue = None
@@ -511,7 +522,7 @@ async def main():
     finally:
         log.info("Shutting down video app...")
         if current_game_id:
-            await stop_game_tasks(current_game_id, active_tasks, gemini_manager, capture_stop_event)
+            await stop_game_tasks(current_game_id, active_tasks, gemini_manager, audio_player, capture_stop_event)
             active_tasks.clear()
 
         if audio_player:

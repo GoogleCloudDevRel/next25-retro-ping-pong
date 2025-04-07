@@ -1,4 +1,5 @@
 google-auth
+google-cloud-logging
 dotenv
 pygame
 python-dotenv
