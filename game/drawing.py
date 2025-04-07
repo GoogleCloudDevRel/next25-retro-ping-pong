@@ -84,8 +84,8 @@ def draw_game_pane(canvas, game_manager, assets):
     )
     canvas.blit(center_line_image, center_line_rect)
 
-    game_manager.paddle1.draw(canvas)
-    game_manager.paddle2.draw(canvas)
+    game_manager.paddle1.draw(canvas, pos_adjust=20)
+    game_manager.paddle2.draw(canvas, pos_adjust=-20)
     game_manager.ball.draw(canvas)
 
 
