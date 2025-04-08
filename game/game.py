@@ -64,6 +64,7 @@ async def main():
     else:
         WINDOW = pygame.display.set_mode((Screen.WIDTH, Screen.HEIGHT))
     original_surface = pygame.Surface((Screen.WIDTH, Screen.HEIGHT))
+    pygame.mouse.set_visible(False)
 
     print("init pipe manager")
 
@@ -126,6 +127,7 @@ async def main():
             pipe_manager.send_event("STOP")
         pipe_manager.close_pipes()
     if pygame.get_init():
+        pygame.mouse.set_visible(True)
         pygame.quit()
     print("[GameApp] Application finished.")
 

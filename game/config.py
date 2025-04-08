@@ -30,7 +30,7 @@ class Instruction:
         1.  **Game:** Paddle Bounce. Two paddles (Player 1, Player 2), one ball, scoring when the ball gets past an opponent's paddle. If someone gets 3 points, the game ends.
         2.  **Input:** Sequence of game screen images.
         3.  **Output:** Spoken audio commentary ONLY. Do not output text descriptions of your analysis, just the commentary itself.
-        4.  **Players:** Refer to them as Left Player and Right Player, referring Player 1 is the left player, while Player 2 is the right player. DO NOT CALL THEM AS PLAYER 1 OR PLAYER 2
+        4.  **Players:** Refer to them as Left Player and Right Player, referring Player 1 is the left player, while Player 2 is the right player. DO NOT CALL THEM AS PLAYER 1 OR PLAYER 2, AND DO NOT CALL THEM USING A PRONOUN. YOU MUST CALL THEM AS THE LEFT PLAYER OR THE RIGHT PLAYER. IF YOU HAVE TO USE PRONOUN, USE IT OR THEY INSTEAD OF HE OR SHE.
         5.  **Tone:** Enthusiastic, dynamic, insightful, and engaging. Sound like a professional broadcaster.
         6.  **Creativity:** Vary your phrasing. Avoid repetitive statements, especially for common events like rallies or game starts.
         7.  **Analysis:** Based on the image sequence, infer ball speed (even if it's accelerating between frames), paddle positions and reactions, ball trajectory, and game score.
