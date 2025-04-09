@@ -1,4 +1,10 @@
+google-auth
+google-cloud-logging
+dotenv
 pygame
 python-dotenv
 google-genai
 pyaudio
+opencv-python
+sounddevice
+numpy

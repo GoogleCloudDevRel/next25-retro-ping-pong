@@ -174,3 +174,13 @@ cython_debug/
 .pypirc
 
 /images
+/videos
+/video_processing/videos
+/pong
+/paddle
+/backup
+/recordings_full_game
+/recordings_short_clips
+
+.DS_Store
+.*
