@@ -272,10 +272,7 @@ async def send_task(
                 if len(gemini_manager.images) > 0:
                     try:
                         log.info(f"[{game_id}] Sending GOAL prompt...")
-                        await gemini_manager.send_chunk(
-                            Instruction.PROMPT_GOAL_TEMPLATE.format(
-                                scorer_name=scorer, left_score=left, right_score=right
-                            ))
+                        await gemini_manager.send_chunk(Instruction.PROMPT_GOAL)
                         last_send_time = time.monotonic()
                         log.info(f"[{game_id}] GOAL prompt sent (with {len(list(gemini_manager.images))} images). Timer paused.")
                     except Exception as e:

@@ -7,21 +7,6 @@ dotenv.load_dotenv()
 
 
 class Instruction:
-    VIDEO_ANALYSIS = \
-        """
-        You are a sports video analyst for a fast-paced Paddle Bounce game.
-        Your task is to watch short video clips and IMMEDIATELY provide a concise summary of the action that just occurred.
-        Your response will be sent to the commentator to create live commentary.
-        If the last frame of the video shows 'Goal!' in the center of the image, that means someone gets a goal.
-        Figure out the image when the goal event happens. If the ball is on the right side, that means player 1 gets a score, otherwise, if the ball is on the left side, that means player 2 gets a score.
-        You should also mention about the current score, displayed on the bottom side when the goal event happens.
-        *** You must prioritize the goal event than any other things. ***
-        The length of the summary should be less than two sentences.
-        You should carefully check the ball's speed, which is getting faster and faster when it bounces to paddles.
-        Briefly describe the key action. Focus on the event that the ball is bouncing with the paddle. Describe the movement of paddles.
-        Do NOT include any extra conversational text or filler words.
-        """
-
     LIVE = \
         """
         You are an expert sports commentator specializing in fast-paced arcade and digital sports. Your current assignment is to provide live, engaging audio commentary for a game of "Paddle Bounce," a classic Pong-like game featuring two players: Player 1 and Player 2.
@@ -60,22 +45,6 @@ class Instruction:
           **Conciseness:** Keep the commentary brief and to the point.
           **Tone:** Maintain an engaging, commentator-like tone suitable for audio delivery.
           **Duration:** Each distinct commentary segment must NOT exceed 10 seconds.
-        """
-
-    PROMPT_GOAL_TEMPLATE = """
-        **Objective:** Generate enthusiastic audio commentary for a goal scored in a Paddle Bounce game.
-        **Context:**
-        *   An image showing the game state right after the goal is provided for visual context.
-        *   **Crucial Information:** Player {scorer_name} just scored. The new score is now Player 1: {left_score}, Player 2: {right_score}.
-
-        **Instructions:**
-        1.  **Use Provided Facts:** Generate commentary based primarily on the **Crucial Information** provided above (scorer and exact score). You may use the image for visual flair or context about the play *leading* to the goal, but the scorer and score *must* match the provided facts.
-        2.  **Generate Audio Commentary:**
-            *   Start with an excited exclamation (e.g., "GOAL!", "SCORE!", "WHAT A POINT!").
-            *   Clearly state **which player scored**, using the provided name: "{scorer_name}".
-            *   Announce the **new, exact score**, using the provided numbers: "{left_score}" for Player 1 and "{right_score}" for Player 2. Example: "{scorer_name} scores! The score is now {left_score} to {right_score}!"
-            *   (Optional but recommended) Add a brief, relevant comment about the goal or the score situation, potentially drawing inspiration from the image or score (e.g., "And {scorer_name} takes the lead!", "{scorer_name} ties it up!", "What a comeback!").
-        3.  **Output Format:** Output **audio commentary only**. Do not include any introductory or concluding text about these instructions.
         """
 
     PROMPT_GOAL = """

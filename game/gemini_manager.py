@@ -35,7 +35,7 @@ class GeminiManager:
                     "system_instruction": Instruction.LIVE,
                     "generation_config": {
                         "temperature": 2
-                    }
+                    },
                 }
             )
             self.session = await self.context_manager.__aenter__()
